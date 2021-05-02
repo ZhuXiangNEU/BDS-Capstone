@@ -5,6 +5,7 @@ library(shinythemes)
 library(maplet)
 library(tidyverse)
 library(DT)
+library(dplyr)
 
 ######################    Maplet   #########################
 #          Jinfeng Lu, Xiang Zhu, Yifan Wu                 #
@@ -197,43 +198,32 @@ D1 <- D1 %>%
 ########################       Functions     #############################
 ########################################################################## 
 
-
-# Get the next names by selected name list
-# funs: a vector (eg: c("plots", "van"))
-get_next_fun_names <- function(funs) {
-    fun_names <- list()
-    for (result in metadata(D1)$results) {
-        fun_names = append(fun_names, list(result$fun))
+# Extract all the object names for accessor
+obj_list <- data.frame()
+for (i in seq_along(metadata(D1)$results)) {
+    for (j in seq_along(metadata(D1)$results[[i]]$fun)) {
+        obj_list[i, j] <- metadata(D1)$results[[i]]$fun[j]
     }
-    
-    next_name <- c()
-    if (length(funs) == 1) {
-        for (name in fun_names) {
-            if (name[1] == funs) {
-                next_name <- c(next_name, name[2])
-            }
-        }
-    } else {
-        for (name in fun_names) {
-            if (exists(name[3])) {
-                if ((name[1] == funs[1]) & (name[2] == funs[2])) {
-                    next_name <- c(next_name, name[3])
-                }
-            }
-        }
-    }
-    next_name = sort(next_name)[!duplicated(sort(next_name))]
-    return(next_name)
 }
 
+# Extract all the stat_name
+stat_name <- data.frame(name=NA)
+for (i in seq_along(metadata(D1)$results)) {
+    if ("stat_name" %in% names(metadata(D1)$results[[i]]$args)){
+        stat_name[i, 1] <- metadata(D1)$results[[i]]$args$stat_name
+    } else {
+        stat_name[i, 1] <- "(no stat_name)"
+    }
+}
+# distinct the not-null values
+# stat_name <- distinct(subset(stat_name, !is.na(name)), name)
+
+# merge object names and stat_name
+obj_name <- cbind(obj_list, stat_name)
 
 ##
 get_plots_by_tabs <- function(tab1, tab2) {
-    if (tab2 == "") {
-        results <- D1 %>% mtm_res_get_entries(c("plots", tab1))
-    } else {
-        results <- D1 %>% mtm_res_get_entries(c("plots", tab1, tab2))
-    }
+    results <- D1 %>% mtm_res_get_entries(c(tab1, tab2))
     
     plots <- list()
     for (i in 1:length(results)) {
@@ -241,18 +231,6 @@ get_plots_by_tabs <- function(tab1, tab2) {
     }
 
     return(plots)
-}
-
-##
-get_table_name <- function() {
-    fun_names <- list()
-    for (result in metadata(D1)$results) {
-        if ("stat_name" %in% names(result$args)) {
-            fun_names = append(fun_names, result$args$stat_name)
-        }
-    }
-    
-    return(unique(fun_names))
 }
 
 ########################################################################## 
@@ -291,15 +269,24 @@ ui <- shinyUI(
                                 "Plots",
                                 # Sidebar panel for controls.
                                 sidebarPanel(
+                                    selectInput(
+                                        "mod1.0",
+                                        label = "Select stat name:",
+                                        choices = c(unique(obj_name$name)),
+                                        selected = "(no stat_name)"
+                                    ),
                                     uiOutput("mod1.1"),
                                     uiOutput("mod1.2"),
-                                    uiOutput("mod1.3"),
                                     tags$p(
                                         HTML("<b>Hint:</b> Module 1 requires extracting all the result objects."
                                         )),
                                     tags$p(
                                         HTML("Users can assess results in a drop-down menu that offers a list of a statname and a plot type (e.g. “missingness”, “pval”)."
                                         )),
+                                    br(),
+                                    br(),
+                                    # delay the output
+                                    actionButton("mod1.go.p", "Update"),
                                     width = 3
                                 ),
                                 # Main panel with plot.
@@ -309,11 +296,18 @@ ui <- shinyUI(
                             tabPanel("Tables",
                                      
                                      # Sidebar panel for controls.
-                                     sidebarPanel(uiOutput("mod1.4"),
-                                                  width = 3),
+                                     sidebarPanel(selectInput(
+                                         "mod1.3",
+                                         label = "Select stat name:",
+                                         choices = c(unique(obj_name$name)),
+                                         selected = "(no stat_name)"),
+                                         br(),
+                                         br(),
+                                         # delay the output
+                                         actionButton("mod1.go.t", "Update"),
+                                         width = 3), 
                                      # Main panel with plot.
                                      mainPanel(fluidRow(dataTableOutput("mod1.t")))))),
-            
             
             # Module 2
             tabPanel("Module 2"),
@@ -343,8 +337,8 @@ server <- shinyServer(function(input, output) {
     output$mod1.1 = renderUI({
         selectInput(
             "mod1.1",
-            label = "Tab 1",
-            choices = get_next_fun_names(c("plots")),
+            label = "Select plot type:",
+            choices = c(unique(obj_name$V2[obj_name$V1 == "plots" & obj_name$name == input$"mod1.0"])),
             selected = ""
         )
     })
@@ -352,38 +346,34 @@ server <- shinyServer(function(input, output) {
     output$mod1.2 = renderUI({
         selectInput(
             "mod1.2",
-            label = "Tab 2",
-            choices = get_next_fun_names(c("plots", input$"mod1.1")),
+            label = "Select plot number:",
+            choices = c(1:length(get_plots_by_tabs("plots", input$"mod1.1"))),
             selected = ""
         )
     })
     
-    output$mod1.3 = renderUI({
-        selectInput(
-            "mod1.3",
-            label = "Tab 3",
-            choices = c(1:length(get_plots_by_tabs(input$"mod1.1", input$"mod1.2"))),
-            selected = ""
-        )
-    })
-    
-    output$mod1.4 = renderUI({
-        selectInput(
-            "mod1.4",
-            label = "Tab 1",
-            choices = c(unlist(get_table_name())),
-            selected = ""
-        )
+    # reactive expression
+    mode1_plot_reactive <- eventReactive(input$mod1.go.p, {
+        c(input$mod1.0, input$mod1.1, input$mod1.2)
     })
     
     output$mod1.p <- renderPlot({
-        plots <- get_plots_by_tabs(input$"mod1.1", input$"mod1.2")
-        plots[as.numeric(input$"mod1.3")]
+        inputs <- mode1_plot_reactive()
+        plots <- get_plots_by_tabs("plots", inputs[2])
+        plots[as.numeric(inputs[3])]
+    })
+    
+    # reactive expression
+    mode1_table_reactive <- eventReactive(input$mod1.go.t, {
+        c(input$mod1.3)
     })
     
     output$mod1.t <- renderDataTable({
-        mtm_get_stat_by_name(D1, input$"mod1.4")
+        inputs <- mode1_table_reactive()
+        mtm_get_stat_by_name(D1, inputs[1])
     })
 })
+
+
 
 shinyApp(ui = ui, server = server)

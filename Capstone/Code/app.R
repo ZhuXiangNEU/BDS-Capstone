@@ -338,7 +338,11 @@ server <- shinyServer(function(input, output) {
         selectInput(
             "mod1.1",
             label = "Select plot type:",
-            choices = c(unique(obj_name$V2[obj_name$V1 == "plots" & obj_name$name == input$"mod1.0"])),
+            choices = if (input$"mod1.0" == "(no stat_name)") {
+                c(unique(obj_name$V2[obj_name$V1 == "plots"]))
+            } else {
+                c(unique(obj_name$V2[obj_name$V1 == "plots" & obj_name$name == input$"mod1.0"]))
+            },
             selected = ""
         )
     })

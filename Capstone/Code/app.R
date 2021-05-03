@@ -5,7 +5,7 @@ library(shinythemes)
 library(maplet)
 library(tidyverse)
 library(DT)
-library(dplyr)
+library(plotly)
 
 ######################    Maplet   #########################
 #          Jinfeng Lu, Xiang Zhu, Yifan Wu                 #
@@ -233,6 +233,19 @@ get_plots_by_tabs <- function(tab1, tab2) {
     return(plots)
 }
 
+
+## pca/umap
+get_plots_mod3 <- function(type, title, color, FUN = mt_plots_pca) {
+    D1 %>% FUN(
+        scale_data = T,
+        title = title,
+        color = color,
+        size = 2.5,
+        ggadd = scale_size_identity()
+    ) %>%
+        mtm_res_get_entries(c("plots", type))
+}
+
 ########################################################################## 
 ######################## build the Shiny App #############################
 ########################################################################## 
@@ -314,7 +327,33 @@ ui <- shinyUI(
             
             
             # Module 3
-            tabPanel("Module 3"),
+            tabPanel("Module 3",
+                     # Sidebar panel for controls.
+                     sidebarPanel(
+                         selectInput("mod3.1",
+                                      "Select plot type:",
+                                      choices = c("pca", "umap"),
+                                      selected = ""), 
+                         # select one colData column for coloring
+                         selectInput(
+                             "mod3.2",
+                             "Select colData column:",
+                             choices = names(colData(D1)),
+                             selected = ""
+                         ), 
+                         tags$p(
+                             HTML("<b>Hint:</b> Module 3 requires generating an interactive 2D projection of PCA/UMAP."
+                             )),
+                         tags$p(
+                             HTML("It displays a drop-down menu of all colData columns for coloring."
+                             )),
+                         br(),
+                         br(),
+                         # delay the output
+                         actionButton("mod3.go.p", "Update"),
+                         width = 3), 
+                     # Main panel with plot.
+                     mainPanel(plotOutput("mod3.p"))),
             
             
             # Module 4
@@ -376,8 +415,29 @@ server <- shinyServer(function(input, output) {
         inputs <- mode1_table_reactive()
         mtm_get_stat_by_name(D1, inputs[1])
     })
+    
+    # reactive expression
+    mode3_plot_reactive <- eventReactive(input$mod3.go.p, {
+        c(input$mod3.1, input$mod3.2)
+    })
+    
+    # render pca/umap
+    output$mod3.p <- renderPlot({
+        inputs <- mode3_plot_reactive()
+        type <- inputs[1]
+        title <- paste0("scaled ", inputs[1], "- ", inputs[2])
+        color <- colData(D1)[, names(colData(D1)) == inputs[2]]
+        if (type == "pca"){
+            get_plots_mod3(type, title, color, mt_plots_pca)
+        } else {
+            get_plots_mod3(type, title, color, mt_plots_umap)
+        }
+    })
 })
 
 
 
 shinyApp(ui = ui, server = server)
+
+
+

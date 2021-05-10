@@ -19,3 +19,39 @@
 .nav-tabs {
   font-size: 12pt;
 }
+      
+
+
+/* Main navbar colour: title background*/
+.navbar-default {
+  background-color: #CF4520;
+    border-color: #ffffff;
+}
+
+/* Hoover colour for navbar buttons*/
+.navbar-default .navbar-nav > li > a:hover,
+.navbar-default .navbar-nav > li > a:focus {
+  color: #ffffff;
+  background-color: #B31B1B;
+}
+
+/* Navbar active button colour*/
+.navbar-default .navbar-nav > .active > a,
+.navbar-default .navbar-nav > .active > a:hover,
+.navbar-default .navbar-nav > .active > a:focus {
+  color: #B31B1B;
+  background-color: #FFFFFF;
+}        
+         
+.navbar-default .navbar-brand {
+  font-size: 15px;
+} /* title text color */
+
+.btn-default {
+  color: #ffffff;
+  background-color: #E87722;
+  border-color: #97989A;
+} /* button color */
+      
+      
+.well {background-color:#dddddd;}   /* sidebarPanel color */

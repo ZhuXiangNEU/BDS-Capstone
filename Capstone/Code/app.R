@@ -305,6 +305,7 @@ mod3_plots_umap <- function(num_assay = 1,
 
 ui <- shinyUI(
     fluidPage(
+        theme = "bootstrap.css",
         includeCSS("www/style.css"),
         setBackgroundColor("#FFFFFF"),# set canvas background color
         div(style = "padding: 1px 0px; width: '100%'",

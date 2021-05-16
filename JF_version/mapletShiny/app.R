@@ -301,7 +301,7 @@ mod3_plots_pca <- function(D, title = "PCA",
     df = data.frame(x = pca$rotation[, pc1], 
                     y = pca$rotation[, pc2], 
                     rowData(D)
-                    )
+    )
     colnames(df)[1:2] <- c(sprintf("PC%d", pc1), 
                            sprintf("PC%d", pc2)
     )
@@ -315,7 +315,7 @@ mod3_plots_pca <- function(D, title = "PCA",
                 aes_string(
                   x = sprintf("PC%d", pc1), 
                   y = sprintf("PC%d", pc2)
-                  )) + 
+                )) + 
       geom_point() + 
       xlab(pc1name) + 
       ylab(pc2name) + 
@@ -436,13 +436,13 @@ ui <- fluidPage(
     title = div(img(src='logo.png',
                     style="float:left; margin-top: -10px; padding-right:10px;padding-bottom:10px",
                     height = 60),
-                "BDS Capstone Maplet",
+                "Krumsiek Lab",
                 tags$script(HTML("var header = $('.navbar > .container-fluid');header.append('<div style=\"float:right\"><a href=\"https://github.com/krumsieklab/maplet\"><img src=\"github.png\" alt=\"github\" style=\"float:right;width:33px;height:40px;padding-top:10px;\"> </a></div>');console.log(header)")),
                 br(),
                 tags$script(HTML("var header = $('.navbar > .container-fluid');header.append('<div style=\"float:right\"><a href=\"https://weill.cornell.edu\"><img src=\"WCM.png\" alt=\"logo\" style=\"float:right;height:50px;margin-top: 6px; padding-right:10px; \"> </a></div>');console.log(header)")),
                 windowTitle = "Maplet"),
     # sticky tabs while scrolling main panel
-    position = c("fixed-top"),
+    position = c("fixed-top"), 
     # Six Head tabs to accommodate for navigation and comparison between modules
     tabPanel("Module 1", 
              sidebarLayout(
@@ -509,14 +509,6 @@ ui <- fluidPage(
                             # function argument
                             uiOutput("mod3_plot_argument"),
                             br(),
-                            # select different hover text
-                            selectInput("mod3_select_hover", "Select hover text:", 
-                                        choices = names(colData(D)),
-                                        width = "220px",
-                                        selected="sample",
-                                        multiple = TRUE
-                            ),
-                            br(),   
                             # select coloring colData and factor it
                             uiOutput("mod3_color_ui"),
                             br(),

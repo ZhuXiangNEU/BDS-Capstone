@@ -390,31 +390,6 @@ library(tidyverse)
 library(DT)
 library(plotly)
 
-# This function computes a new data set. It can optionally take a function,
-# updateProgress, which will be called as each row of data is added.
-compute_data <- function(updateProgress = NULL) {
-  # Create 0-row data frame which will be used to store data
-  dat <- data.frame(x = numeric(0), y = numeric(0))
-  
-  for (i in 1:10) {
-    Sys.sleep(0.25)
-    
-    # Compute new row of data
-    new_row <- data.frame(x = rnorm(1), y = rnorm(1))
-    
-    # If we were passed a progress update function, call it
-    if (is.function(updateProgress)) {
-      text <- paste0("x:", round(new_row$x, 2), " y:", round(new_row$y, 2))
-      updateProgress(detail = text)
-    }
-    
-    # Add the new row of data
-    dat <- rbind(dat, new_row)
-  }
-  
-  dat
-}
-
 # Define UI for application
 ui <- fluidPage(
   theme = "bootstrap.css",
@@ -651,7 +626,11 @@ server <- function(input, output) {
       row_n <- ceiling(i/len_j)
       ## set dynamic height of box scatter plots based on output2
       height <- if(plots[[1]]$fun[2]=="box"&plots[[1]]$fun[3]=="scatter"&!is.null(plots[[row_n]]$output2)){
-        (plots[[row_n]]$output2)*100
+        # (plots[[row_n]]$output2)*100
+        1200
+      } else if(plots[[1]]$fun[2]=="stats"){
+        ## set dynamic height of plot_stats based on `nr` in output2
+        (plots[[row_n]]$output2$nr)*20
       } else {
         560
       }
@@ -680,7 +659,14 @@ server <- function(input, output) {
         output_order <- subset(output_order, stat_name==mod1_input_object()[2])
         plots <- list()
         for(plot_i in seq_along(output_order$order)){
-          plots[[plot_i]] <- mtm_res_get_entries(D, c(mod1_input_object()[1], mod1_input_object()[3]))[[output_order$order[plot_i]]]$output
+          if(mod1_input_object()[1]=="plots"&mod1_input_object()[3]=="box"){
+            ## only render top 10 pair objects for box-scatter plots
+            dat <- mtm_res_get_entries(D, c(mod1_input_object()[1], mod1_input_object()[3]))[[output_order$order[plot_i]]]$output
+            dat[[1]]$data <- dat[[1]]$data %>% head(10000)
+            plots[[plot_i]] <- dat
+          } else {
+            plots[[plot_i]] <- mtm_res_get_entries(D, c(mod1_input_object()[1], mod1_input_object()[3]))[[output_order$order[plot_i]]]$output
+          }
         }
         # there are multiple plots
         len_i <- length(plots)
@@ -690,18 +676,6 @@ server <- function(input, output) {
         row_n <- ceiling(my_i/len_j)
         # locate the column in the `plots`
         col_n <- ifelse((my_i %% len_j)==0, len_j, (my_i %% len_j))
-        # ## progress indicator
-        # dat <- data.frame(x = numeric(0), y = numeric(0))
-        # withProgress(
-        #   message = 'Making plot', value = 0, {
-        #     n_i <- dim(plots[[my_i]][[1]]$data)[1]
-        #     for (i_n in 1:n_i) {
-        #       dat <- rbind(dat, data.frame(x = 1, y = 1))
-        #       incProgress(1/n_i, detail = paste("Doing part", i_n))
-        #       Sys.sleep(0.001)
-        #     }
-        #   })
-        # 
         # render the plot object in each loop
         plots[[row_n]][col_n]
       })
@@ -729,8 +703,10 @@ server <- function(input, output) {
               options = list(
                 paging =TRUE,
                 # limit number of rows
-                pageLength =  10)
-    )
+                pageLength =  10)) %>%
+      # set two significant decimals
+      formatSignif(columns=c("statistic", "p.value", "p.adj"), 
+                  digits=2)
   })
   # render plots or table
   output$mod1_output <- renderUI({

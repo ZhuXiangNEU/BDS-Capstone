@@ -1,22 +1,19 @@
 rm(list=ls())
 
 library(shiny)
-library(shinyWidgets)
 library(maplet)
 library(tidyverse)
 library(DT)
 library(plotly)
+library(shinyWidgets)
 
-######################    Maplet   #########################
-#          Jinfeng Lu, Xiang Zhu, Yifan Wu                 #
-#                                                          #
-############################################################
 
 
 ########################################################################## 
 ########################   Data Exploration  #############################
 ########################################################################## 
 
+#### Initialize ----
 #### Initialize ----
 library(maplet)
 library(tidyverse)
@@ -105,34 +102,6 @@ D <-
     mt_plots_heatmap(scale_data = T, annotation_col = c("Diagnosis"), annotation_row = c("SUPER_PATHWAY"),
                      clustering_method = "ward.D2", fontsize = 5, cutree_rows = 3, cutree_cols = 3, color=gplots::bluered(101)) %>%
     {.}
-#### Analysis Function ----
-p_diff_analysis <- function(D, varname, stat_name, alpha=0.05, box_scatter="box"){
-    D %>%
-        # linear model
-        mt_stats_univ_lm(formula = as.formula(sprintf("~  %s",varname)), stat_name = stat_name) %>%
-        # add multiple testing correction
-        mt_post_multtest(stat_name = stat_name, method = "BH") %>%
-        # add stats logging
-        mt_reporting_stats(stat_name = stat_name, stat_filter = p.adj < alpha) %>%
-        # volcano plot as overview of results
-        mt_plots_volcano(stat_name = stat_name,
-                         x = statistic,
-                         feat_filter = p.adj < alpha,
-                         color = p.adj < alpha) %>%
-        # scatter plot
-        mt_plots_box_scatter(stat_name = stat_name,
-                             x = !!sym(varname),
-                             plot_type = box_scatter,
-                             feat_filter = p.adj < alpha, # made very small because otherwise would take an eternity to generate all plots
-                             feat_sort = p.value,
-                             annotation = "{sprintf('P-value: %.2e', p.value)}\nP.adj: {sprintf('%.2e', p.adj)}") %>%
-        # barplot
-        mt_plots_stats_pathway_bar(stat_list = stat_name,
-                                   feat_filter = p.adj < alpha,
-                                   group_col = "SUB_PATHWAY",
-                                   color_col = "SUPER_PATHWAY") %>%
-        {.}
-}
 #### Differential analysis ----
 D %<>%
     # heading for html file
@@ -147,20 +116,112 @@ D %<>%
     mt_reporting_heading(heading = "Statistical Analysis", lvl = 1) %>%
     # heading for html file
     mt_reporting_heading(heading = "Age analysis", lvl = 2) %>%
-    # analysis
-    p_diff_analysis(varname="Age", stat_name= "Age", alpha = 0.05, box_scatter = "scatter") %>%
+    # # analysis
+    # p_diff_analysis(varname="Age", stat_name= "Age", alpha = 0.05, box_scatter = "scatter") %>%
+    # linear model
+    mt_stats_univ_lm(formula = as.formula(sprintf("~  %s","Age")), stat_name = "Age") %>%
+    # add multiple testing correction
+    mt_post_multtest(stat_name = "Age", method = "BH") %>%
+    # add stats logging
+    mt_reporting_stats(stat_name = "Age", stat_filter = p.adj < 0.05) %>%
+    # volcano plot as overview of results
+    mt_plots_volcano(stat_name = "Age",
+                     x = statistic,
+                     feat_filter = p.adj < 0.05,
+                     color = p.adj < 0.05) %>%
+    # scatter plot
+    mt_plots_box_scatter(stat_name = "Age",
+                         x = Age,
+                         plot_type = "scatter",
+                         feat_filter = p.adj < 0.05, 
+                         feat_sort = p.value,
+                         annotation = "{sprintf('P-value: %.2e', p.value)}\nP.adj: {sprintf('%.2e', p.adj)}") %>%
+    # barplot
+    mt_plots_stats_pathway_bar(stat_list = "Age",
+                               feat_filter = p.adj < 0.05,
+                               group_col = "SUB_PATHWAY",
+                               color_col = "SUPER_PATHWAY") %>%
     # heading for html file
     mt_reporting_heading(heading = "outcome1 analysis", lvl = 2) %>%
-    # analysis
-    p_diff_analysis(varname="outcome1", stat_name= "outcome1", alpha = 0.1, box_scatter = "scatter") %>%
+    # # analysis
+    # p_diff_analysis(varname="outcome1", stat_name= "outcome1", alpha = 0.1, box_scatter = "scatter") %>%
+    # linear model
+    mt_stats_univ_lm(formula = as.formula(sprintf("~  %s","outcome1")), stat_name = "outcome1") %>%
+    # add multiple testing correction
+    mt_post_multtest(stat_name = "outcome1", method = "BH") %>%
+    # add stats logging
+    mt_reporting_stats(stat_name = "outcome1", stat_filter = p.adj < 0.1) %>%
+    # volcano plot as overview of results
+    mt_plots_volcano(stat_name = "outcome1",
+                     x = statistic,
+                     feat_filter = p.adj < 0.1,
+                     color = p.adj < 0.1) %>%
+    # scatter plot
+    mt_plots_box_scatter(stat_name = "outcome1",
+                         x = outcome1,
+                         plot_type = "scatter",
+                         feat_filter = p.adj < 0.1, 
+                         feat_sort = p.value,
+                         annotation = "{sprintf('P-value: %.2e', p.value)}\nP.adj: {sprintf('%.2e', p.adj)}") %>%
+    # barplot
+    mt_plots_stats_pathway_bar(stat_list = "outcome1",
+                               feat_filter = p.adj < 0.1,
+                               group_col = "SUB_PATHWAY",
+                               color_col = "SUPER_PATHWAY") %>%
     # heading for html file
     mt_reporting_heading(heading = "outcome2 analysis", lvl = 2) %>%
-    # analysis
-    p_diff_analysis(varname="outcome2", stat_name= "outcome2", alpha = 0.1, box_scatter = "scatter") %>%
+    # # analysis
+    # p_diff_analysis(varname="outcome2", stat_name= "outcome2", alpha = 0.1, box_scatter = "scatter") %>%
+    # linear model
+    mt_stats_univ_lm(formula = as.formula(sprintf("~  %s","outcome2")), stat_name = "outcome2") %>%
+    # add multiple testing correction
+    mt_post_multtest(stat_name = "outcome2", method = "BH") %>%
+    # add stats logging
+    mt_reporting_stats(stat_name = "outcome2", stat_filter = p.adj < 0.1) %>%
+    # volcano plot as overview of results
+    mt_plots_volcano(stat_name = "outcome2",
+                     x = statistic,
+                     feat_filter = p.adj < 0.1,
+                     color = p.adj < 0.1) %>%
+    # scatter plot
+    mt_plots_box_scatter(stat_name = "outcome2",
+                         x = outcome2,
+                         plot_type = "scatter",
+                         feat_filter = p.adj < 0.1, 
+                         feat_sort = p.value,
+                         annotation = "{sprintf('P-value: %.2e', p.value)}\nP.adj: {sprintf('%.2e', p.adj)}") %>%
+    # barplot
+    mt_plots_stats_pathway_bar(stat_list = "outcome2",
+                               feat_filter = p.adj < 0.1,
+                               group_col = "SUB_PATHWAY",
+                               color_col = "SUPER_PATHWAY") %>%
     # heading for html file
     mt_reporting_heading(heading = "Diagnosis", lvl = 2) %>%
-    # analysis
-    p_diff_analysis(varname="Diagnosis", stat_name= "Diagnosis", alpha = 0.5, box_scatter = "box") %>%
+    # # analysis
+    # p_diff_analysis(varname="Diagnosis", stat_name= "Diagnosis", alpha = 0.5, box_scatter = "box") %>%
+    # linear model
+    mt_stats_univ_lm(formula = as.formula(sprintf("~  %s","Diagnosis")), stat_name = "Diagnosis") %>%
+    # add multiple testing correction
+    mt_post_multtest(stat_name = "Diagnosis", method = "BH") %>%
+    # add stats logging
+    mt_reporting_stats(stat_name = "Diagnosis", stat_filter = p.adj < 0.5) %>%
+    # volcano plot as overview of results
+    mt_plots_volcano(stat_name = "Diagnosis",
+                     x = statistic,
+                     feat_filter = p.adj < 0.5,
+                     color = p.adj < 0.5) %>%
+    # scatter plot
+    mt_plots_box_scatter(stat_name = "Diagnosis",
+                         x = Diagnosis,
+                         plot_type = "box",
+                         feat_filter = p.adj < 0.5, # made very small because otherwise would take an eternity to generate all plots
+                         feat_sort = p.value,
+                         annotation = "{sprintf('P-value: %.2e', p.value)}\nP.adj: {sprintf('%.2e', p.adj)}") %>%
+    # barplot
+    mt_plots_stats_pathway_bar(stat_list = "Diagnosis",
+                               feat_filter = p.adj < 0.5,
+                               group_col = "SUB_PATHWAY",
+                               color_col = "SUPER_PATHWAY") %>%
     # heading for html file
     mt_reporting_heading(heading = "Results Overview", lvl = 1) %>%
     # barplot
@@ -170,12 +231,7 @@ D %<>%
                                color_col = "SUPER_PATHWAY") %>%
     {.}
 
-
-########################################################################## 
-########################       Functions     #############################
-########################################################################## 
-
-# Extract all the object names for accessor
+# Extract all the object names for accessor functions
 obj_list <- data.frame()
 for (i in seq_along(metadata(D)$results)) {
     for (j in seq_along(metadata(D)$results[[i]]$fun)) {
@@ -184,394 +240,211 @@ for (i in seq_along(metadata(D)$results)) {
 }
 
 # Extract all the stat_name
-stat_name <- c()
+stat_name <- data.frame(stat_name=NA)
 for (i in seq_along(metadata(D)$results)) {
-    fun <- metadata(D)$results[[i]]
-    stat_name[i] <- if ("stat_name" %in% names(fun$args)) {
-        if (fun$fun[1] == "plots") {
-            if (fun$args$stat_name == "stat_name") {
-                col_name <- colnames(fun$output[[1]]$data)[2]
-                ifelse(col_name == "term",
-                       unique(fun$output[[1]]$data$term),
-                       col_name)
-            } else {
-                fun$args$stat_name
-            }
-        } else {
-            ifelse(is.null(fun$output),
-                   "NULL",
-                   fun$output$outcome)
-        }
+    stat_name[i, 1] <- if ('stat_name' %in% names(metadata(D)$results[[i]]$args)) {
+        metadata(D)$results[[i]]$args$stat_name
+    } else if ('stat_list' %in% names(metadata(D)$results[[i]]$args) & class(metadata(D)$results[[i]]$args$stat_list)!="call") {
+        metadata(D)$results[[i]]$args$stat_list
     } else {
-        "(no stat_name)"
+        NA
     }
 }
-# distinct the not-null values
-# stat_name <- distinct(subset(stat_name, !is.na(name)), name)
+
 
 # merge object names and stat_name
-#obj_name <- cbind(obj_list, stat_name)
-obj_list$name <- stat_name
-obj_list <- obj_list[obj_list$name != "NULL",]
+order_id <- 1:nrow(obj_list)
+obj_name <- cbind(order_id, obj_list, stat_name) 
+obj_name$stat_name <- ifelse(is.na(obj_name$stat_name), 
+                             "(no stat_name)", 
+                             obj_name$stat_name)
 
 
-##
-get_V2_by_tabs <- function(tab1, tab2, tab3 = NULL) {
-    
-    if (is.null(tab3)) {
-        data <- obj_list[obj_list$V1 == tab1 & obj_list$name == tab2,]
-        col_name <- unique(data$V2)
-    } else {
-        data <- obj_list[obj_list$V1 == tab1 &
-                             obj_list$name == tab2 &
-                             obj_list$V2 == tab3,]
-        col_name <- unique(data$V3)
-    }
-
-    return(col_name)
+## SCALE -log10
+reverselog_trans <- function (base = exp(1)){
+    trans <- function(x) -log(x, base)
+    inv <- function(x) base^(-x)
+    scales::trans_new(paste0("reverselog-", format(base)), trans, inv,
+                      scales::log_breaks(base = base),
+                      domain = c(1e-100, Inf))
 }
-
-get_V3_by_tabs <- function(tab1, tab2, tab3) {
-    
-    data <- obj_list[obj_list$V1 == tab1 & obj_list$name ==tab2, ]
-    col_name <- unique(data$V2)
-    
-    return(col_name)
-}
-
-
-## pca/umap #, FUN = mt_plots_pca
-mod3_plots_pca <- function(num_assay = 1,
-                           if_scale = FALSE,
-                           if_factor = FALSE,
-                           col_name) {
-    
-    X <- t(assay(D, num_assay))
-    pca <- stats::prcomp(x = as.matrix(X), center = F, scale = if_scale)
-    df <- data.frame(PCA1 = pca$x[, 1], PCA2 = pca$x[, 2], colData(D))
-    expvar <- (pca$sdev)^2 / sum(pca$sdev^2)
-    
-    if (if_factor) {
-        df[, col_name] <- factor(df[, col_name])
-    }
-    
-    df %>% ggplot(
-           aes_string(
-               x = "PCA1",
-               y = "PCA2",
-               color = col_name
-           )) +
-        geom_point() +
-        xlab(sprintf("PCA1 (%.1f%%)", expvar[1] * 100)) +
-        ylab(sprintf("PCA2 (%.1f%%)", expvar[2] * 100)) +
-        ggtitle(paste0("PCA ", "color by ", col_name,
-                       " (scaled:", if_scale, ", array:", num_assay, ")")) +
-        labs(color = col_name)
-}
-
-mod3_plots_umap <- function(num_assay = 1,
-                            if_scale = FALSE,
-                            if_factor = FALSE,
-                            col_name) {
-    
-    X <- t(assay(D, num_assay))
-    
-    if (if_scale) {
-        X <- scale(X)
-    }
-    
-    umap <- umap::umap(d = as.matrix(X), n_neighbors = 15)
-    df <- data.frame(comp1 = umap$layout[, 1], comp2 = umap$layout[, 2], colData(D))
-    
-    if (if_factor) {
-        df[, col_name] <- factor(df[, col_name])
-    }
-    
-    df %>% ggplot(
-        aes_string(
-            x = "comp1",
-            y = "comp2",
-            color = col_name
-        )) +
-        geom_point() +
-        ggtitle(paste0("Umap ", "color by ", col_name,
-                       " (scaled:", if_scale, ", array:", num_assay, ")")) +
-        labs(color = col_name)
-}
-
 ########################################################################## 
 ######################## build the Shiny App #############################
 ########################################################################## 
 
-ui <- shinyUI(
-    fluidPage(
-        theme = "bootstrap.css",
-        includeCSS("www/style.css"),
-        setBackgroundColor("#FFFFFF"),# set canvas background color
-        div(style = "padding: 1px 0px; width: '100%'",
-            titlePanel(
-                title = "",
-                windowTitle = "Maplet"
-            )
-        ),
-        
-        navbarPage(
-            title = div(img(src='logo.png',
-                            style="float:left; margin-top: -14px; padding-right:10px;padding-bottom:10px",
-                            height = 60),
-                        "BDS Capstone Maplet",
-                        tags$script(HTML("var header = $('.navbar > .container-fluid');header.append('<div style=\"float:right\"><a href=\"https://github.com/krumsieklab/maplet\"><img src=\"github.png\" alt=\"github\" style=\"float:right;width:33px;height:40px;padding-top:10px;\"> </a></div>');console.log(header)")),
-                        br(),
-                        tags$script(HTML("var header = $('.navbar > .container-fluid');header.append('<div style=\"float:right\"><a href=\"https://weill.cornell.edu\"><img src=\"WCM.png\" alt=\"logo\" style=\"float:right;height:50px;padding-top:-14px;\"> </a></div>');console.log(header)")),
-                        windowTitle = "Maplet"),
-            
-            # Module 1 
-            tabPanel(
-                "Module 1",
-                
-                # Sidebar panel for controls.
-                sidebarPanel(
-                    selectInput(
-                        "mod1.1",
-                        label = "Select stat name:",
-                        choices = c(unique(obj_list$name)),
-                        selected = "(no stat_name)"
-                    ),
-                    radioButtons(
-                        "mod1.2",
-                        label = "Select output type:",
-                        choices = list("Plot" = "plots",
-                                       "Table" = "stats"),
-                        selected = "plots"
-                    ),
-                    uiOutput("mod1.3"),
-                    uiOutput("mod1.4"),
-                    tags$p(
-                        HTML(
-                            "<b>Hint:</b> Module 1 requires extracting all the result objects."
-                        )
-                    ),
-                    tags$p(
-                        HTML(
-                            "Users can assess results in a drop-down menu that offers a list of a statname and a plot type (e.g. “missingness”, “pval”)."
-                        )
-                    ),
-                    br(),
-                    br(),
-                    # delay the output
-                    actionButton("mod1.go", "Update"),
-                    width = 3
-                ),
-                # Main panel with plot.
-                mainPanel(uiOutput("mod1.out"),
-                          width = 9)
-            ), 
-            
-            # Module 2
-            tabPanel("Module 2"),
-            
-            
-            # Module 3
-            tabPanel("Module 3",
-                     # Sidebar panel for controls.
-                     sidebarPanel(
-                         # check box for scale
-                         checkboxInput("mod3.scale",
-                                       "Scale",
-                                       value = FALSE),
-                         # check box for factor
-                         checkboxInput("mod3.factor",
-                                       "Factor",
-                                       value = FALSE),
-                         # dropdown menu for different assay
-                         selectInput("mod3.assay",
-                                     "Select one assay:", 
-                                     choices = c(1:length(assays(D))),
-                                     selected = ""
-                         ),
-                         # select one plot type
-                         radioButtons("mod3.1",
-                                     "Select plot type:",
-                                     choices = list("PCA" = "pca", 
-                                                    "UMAP" = "umap")), 
-                         # select one colData column for coloring
-                         selectInput(
-                             "mod3.2",
-                             "Select colData column:",
-                             choices = names(colData(D)),
-                             selected = ""
-                         ), 
-                         tags$p(
-                             HTML("<b>Hint:</b> Module 3 requires generating an interactive 2D projection of PCA/UMAP."
-                             )),
-                         tags$p(
-                             HTML("It displays a drop-down menu of all colData columns for coloring."
-                             )),
-                         br(),
-                         br(),
-                         # delay the output
-                         actionButton("mod3.go", "Update"),
-                         width = 3), 
-                     # Main panel with plot.
-                     mainPanel(plotlyOutput("mod3.out"),
-                               width = 9)),
-            
-            
-            # Module 4
-            tabPanel("Module 4"),
-            
-            
-            # Module 5
-            tabPanel("Module 5"),
-            
-            
-            # Module 6
-            tabPanel("Module 6")
-                            
-                            
-)))
-
-
-server <- shinyServer(function(input, output) {
-    
-    output$mod1.3 = renderUI({
-        selectInput(
-            "mod1.3",
-            label = "Select the object:",
-            choices = get_V2_by_tabs(input$mod1.2, input$mod1.1),
-            selected = ""
+ui <- fluidPage(
+    theme = "bootstrap.css",
+    includeCSS("www/style.css"),
+    setBackgroundColor("#FFFFFF"),# set canvas background color
+    div(style = "padding: 1px 0px; width: '100%'",
+        titlePanel(
+            title = "",
+            windowTitle = "Maplet"
         )
+    ),
+    # remove shiny "red" warning messages on GUI
+    tags$style(type="text/css",
+               ".shiny-output-error { visibility: hidden; }",
+               ".shiny-output-error:before { visibility: hidden; }"
+    ),
+    
+    navbarPage(
+        # embed Maplet logo and title
+        title = div(img(src='logo.png',
+                        style="float:left; margin-top: -10px; padding-right:10px;padding-bottom:10px",
+                        height = 60),
+                    "Krumsiek Lab",
+                    tags$script(HTML("var header = $('.navbar > .container-fluid');header.append('<div style=\"float:right\"><a href=\"https://github.com/krumsieklab/maplet\"><img src=\"github.png\" alt=\"github\" style=\"float:right;width:33px;height:40px;padding-top:10px;\"> </a></div>');console.log(header)")),
+                    br(),
+                    tags$script(HTML("var header = $('.navbar > .container-fluid');header.append('<div style=\"float:right\"><a href=\"https://weill.cornell.edu\"><img src=\"WCM.png\" alt=\"logo\" style=\"float:right;height:50px;margin-top: 6px; padding-right:10px; \"> </a></div>');console.log(header)")),
+                    windowTitle = "Maplet"),
+        # sticky tabs while scrolling main panel
+        position = c("fixed-top"), 
+        
+        # Module 1
+        tabPanel("Module 1"),
+        
+        # Module 2
+        tabPanel("Module 2",
+                 fluidRow(column(
+                     width = 10,
+                     selectInput(
+                         "mod2.stat",
+                         "Select one stat name:",
+                         choices = distinct(obj_name[obj_name$V1 == "plots" &
+                                                         obj_name$V2 == "stats", ],
+                                            stat_name)$stat_name,
+                         selected  = "outcome1"
+                     ),
+                     plotlyOutput("mod2.bar", height = 600),
+                     br())), 
+                 fluidRow(column(width = 10,
+                                 plotlyOutput("mod2.vol", height = 400),
+                                 br())),
+                 fluidRow(column(width = 10,
+                                 plotlyOutput("mod2.box", height = 400)))
+                 ), 
+        
+        
+        # Module 3
+        tabPanel("Module 3"),
+        
+        
+        # Module 4
+        tabPanel("Module 4"),
+        
+        
+        # Module 5
+        tabPanel("Module 5"),
+        
+        
+        # Module 6
+        tabPanel("Module 6")
+        
+        
+    )
+)
+
+
+server <- function(input, output, session) {
+    
+    #
+    output$mod2.bar <- renderPlotly({
+        plots <- mtm_res_get_entries(D, c("plots", "stats"))
+        for (i in seq_along(plots)) {
+            if (plots[[i]]$args$stat_list == input$mod2.stat) {
+                plot <- plots[[i]]$output[[1]]
+            }
+        }
+        ggplotly(plot, source = "sub_bar") %>% layout(dragmode = "lasso")
     })
     
-    output$mod1.4 = renderUI({
-        if (input$mod1.2 == "plots") {
-            return()
-        } else {
-            selectInput(
-                "mod1.4",
-                label = "Select the object2:",
-                choices = get_V2_by_tabs(input$mod1.2,#stats
-                                         input$mod1.1,#Diagnosis
-                                         input$mod1.3),#univ
-                selected = ""
-            )
+    #
+    output$mod2.vol <- renderPlotly({
+        d <- event_data("plotly_click", source = "sub_bar")
+        if (!is.null(d)) {
+            plots <- mtm_res_get_entries(D, c("plots", "stats"))
+            for (i in seq_along(plots)) {
+                if (plots[[i]]$args$stat_list == input$mod2.stat) {
+                    data <- plots[[i]]$output[[1]]$data
+                }
+            }
+            lvls <- rev(levels(data$label))
+            label <- lvls[round(as.numeric(d$y))]
+            name <- data[data$label == label, ]$name
+            
+            plots_vol <- mtm_res_get_entries(D, c("plots", "volcano"))
+            for (i in seq_along(plots_vol)) {
+                if (plots_vol[[i]]$args$stat_name == input$mod2.stat) {
+                    data_vol <- plots_vol[[i]]$output[[1]]$data
+                }
+            }
+            
+            row_data <- rowData(D) %>% data.frame()
+            names <- unlist(row_data[row_data$SUB_PATHWAY == name,]$name)
+            data_vol <- data_vol[data_vol$name %in% names, ]
+            
+            plot <- data_vol %>% ggplot(aes(x = statistic, y = p.value)) +
+                geom_point() +
+                scale_y_continuous(trans = reverselog_trans(10),
+                                   breaks = scales::trans_breaks("log10", function(x) 10^x),
+                                   labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+                labs(y = "p-value") +
+                ggtitle(input$mod2.stat) +
+                ggrepel::geom_text_repel(aes(label = name), max.overlaps = Inf)
+            ggplotly(plot, source = "sub_vol") %>% layout(dragmode = "lasso")
         }
     })
     
-    
-    # reactive expression
-    mod1_reactive <- eventReactive(input$mod1.go, {
-        c(input$mod1.1, input$mod1.2, input$mod1.3, input$mod1.4)
-    })
-    
-    output$mod1.p <- renderUI({
-        inputs <- mod1_reactive()
-        plots <- D %>% mtm_res_get_entries(c("plots", inputs[3]))
-        
-        # there are multiple plots
-        len_i <- length(plots)
-        # some plots have multiple objects
-        len_j <- length(plots[[1]]$output)
-        # name every plot object in UI
-        mod1_plot_output_list <- lapply(1:(len_i * len_j), function(i) {
-            plotname <- paste("Plot", i, sep = "")
-            plotOutput(plotname)
-        })
-        
-        # Convert the list to a tagList - this is necessary for the list of items
-        # to display properly.
-        do.call(tagList, mod1_plot_output_list)
-    })
-    
-    # Call renderPlot for each one. Plots are only actually generated when they
-    # are visible on the web page.
-    for (i in 1:10) {
-        # Need local so that each item gets its own number. Without it, the value
-        # of i in the renderPlot() will be the same across all instances, because
-        # of when the expression is evaluated.
-        local({
-            my_i <- i
-            plotname <- paste("Plot", my_i, sep="")
+    #
+    output$mod2.box <- renderPlotly({
+        d1 <- event_data("plotly_click", source = "sub_bar")
+        d2 <- event_data("plotly_click", source = "sub_vol")
+        if (!is.null(d1) & !is.null(d2)) {
+            plots <- mtm_res_get_entries(D, c("plots", "stats"))
+            for (i in seq_along(plots)) {
+                if (plots[[i]]$args$stat_list == input$mod2.stat) {
+                    data <- plots[[i]]$output[[1]]$data
+                }
+            }
+            lvls <- rev(levels(data$label))
+            label <- lvls[round(as.numeric(d1$y))]
+            name <- data[data$label == label, ]$name
             
-            # render plots
-            output[[plotname]] <- renderPlot({
-                inputs <- mod1_reactive()
-                plots <- D %>% mtm_res_get_entries(c("plots", inputs[3]))
-                # there are multiple plots
-                len_i <- length(plots)
-                # some plots have multiple objects
-                len_j <- length(plots[[1]]$output)
-                # locate the row in the `plots`
-                row_n <- ceiling(my_i/len_i)
-                # locate the column in the `plots`
-                col_n <- ifelse((my_i %% len_i)==0, len_j, (my_i %% len_i))
-                
-                plots[[row_n]]$output[col_n]
-            })
-        })
-    }
-    
-    output$mod1.t <- renderDataTable({
-        inputs <- mod1_reactive()
-        tb <- D %>% mtm_res_get_entries(c(inputs[2], inputs[3], inputs[4]))
-        
-        tb[[1]]$output$table
+            plots_vol <- mtm_res_get_entries(D, c("plots", "volcano"))
+            for (i in seq_along(plots_vol)) {
+                if (plots_vol[[i]]$args$stat_name == input$mod2.stat) {
+                    data_vol <- plots_vol[[i]]$output[[1]]$data
+                }
+            }
+            
+            row_data <- rowData(D) %>% data.frame()
+            names <- unlist(row_data[row_data$SUB_PATHWAY == name,]$name)
+            data_vol <- data_vol[data_vol$name %in% names, ]
+            
+            
+            name2 <- data_vol[as.numeric(d2$pointNumber) + 1, ]$name[1]
+            
+            plots_box <- mtm_res_get_entries(D, c("plots", "box"))
+            for (i in seq_along(plots_box)) {
+                if (plots_box[[i]]$args$stat_name == input$mod2.stat) {
+                    data_box <- plots_box[[i]]$output[[1]]$data
+                }
+            }
+            data_box <- data_box[data_box$name==name2, ]
+            p.value <- signif(mean(data_box$p.value), 3)
+            p.adj <- signif(mean(data_box$p.adj), 3)
+            plot <- data_box %>%
+                ggplot(aes_string(x = input$mod2.stat, y = "value")) +
+                geom_point() +
+                geom_smooth(method = "lm", se = FALSE) +
+                ggtitle(name2) +
+                annotate("text",x=-Inf,y=Inf,hjust=0,vjust=2,label=paste0("P-value: ", p.value)) +
+                annotate("text",x=-Inf,y=-Inf,hjust=0,vjust=-1,label=paste0("P.adj: ", p.adj))
+            ggplotly(plot) %>% layout(dragmode = "lasso")
+        }
     })
-    
-    output$mod1.out <- renderUI({
-        switch(
-            input$mod1.2,
-            "plots" = uiOutput("mod1.p"),
-            "stats" = fluidRow(dataTableOutput("mod1.t"))
-        )
-    })
-    
-    # reactive expression
-    mod3_reactive <- eventReactive(input$mod3.go, {
-        c(input$mod3.scale,
-          input$mod3.factor,
-          input$mod3.assay,
-          input$mod3.1,
-          input$mod3.2)
-    })
-    
-    output$mod3.out <- renderPlotly({
-        inputs <- mod3_reactive()
-        plot <-
-            switch(inputs[4],
-                   "pca" = ggplotly(
-                       mod3_plots_pca(
-                           as.numeric(inputs[3]),
-                           as.logical(inputs[1]),
-                           as.logical(inputs[2]),
-                           inputs[5]
-                           
-                       )
-                   ),
-                   "umap" = ggplotly(
-                       mod3_plots_umap(
-                           as.numeric(inputs[3]),
-                           as.logical(inputs[1]),
-                           as.logical(inputs[2]),
-                           inputs[5]
-                       )
-                   ))
-        
-        plot %>%
-            layout(
-                legend = list(
-                    orientation = "h",
-                    # show entries horizontally
-                    xanchor = "center",
-                    # use center of legend as anchor
-                    x = .5,
-                    y = -.2
-                ),
-                autosize = TRUE
-            )
-    })
-    
-})
+}
 
 
 shinyApp(ui = ui, server = server)

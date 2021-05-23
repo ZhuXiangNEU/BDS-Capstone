@@ -1,219 +1,14 @@
-#### Initialize ----
+# load packages
+library(shiny)
+library(shinyWidgets)
 library(maplet)
+# devtools::install_github(repo="krumsieklab/maplet@v1.0.1", subdir="maplet")
 library(tidyverse)
-#### Loading and preprocessing ----
-file_data <- system.file("extdata", "example_data/simulated_data.xlsx", package = "maplet")
-D <-
-  # validate checksum
-  mt_load_checksum(file=file_data, checksum = "80afcd72481c6cf3dcf83342e3513699") %>%
-  # load data
-  mt_load_xls(file=file_data, sheet="data", samples_in_row=T, id_col="sample") %>%
-  # load metabolite (rowData) annotations
-  mt_anno_xls(file=file_data, sheet="metinfo",anno_type="features", anno_id_col="name", data_id_col = "name") %>%
-  # load clinical (colData) annotations
-  mt_anno_xls(file=file_data, sheet="clin", anno_type="samples", anno_id_col ="sample", data_id_col ="sample") %>%
-  # # log assay dimensions and number of columns for both metabolite and clincial annotations
-  mt_reporting_data() %>%
-  # generate variables
-  mt_anno_mutate(anno_type = "samples", col_name = "outcome1", term = ifelse(Diagnosis==1,rnorm(1,mean=0, sd=1), rnorm(1,mean=0.5, sd=1))) %>%
-  mt_anno_mutate(anno_type = "samples", col_name = "outcome2", term = Age+rnorm(1)) %>%
-  # heading
-  mt_reporting_heading(heading = "Data Clean-up", lvl = 1) %>%
-  # filter samples
-  mt_modify_filter_samples(filter = !is.na(Diagnosis)) %>%
-  # create additional variable
-  mt_anno_mutate(anno_type = "samples", col_name = "PreBioPSALog", term = log10(PreBioPSA)) %>%
-  # modify variable to factor
-  mt_anno_apply(anno_type = "samples", col_name = "Diagnosis", fun = as.factor) %>%
-  # remove metabolites with no pathway annotation
-  mt_modify_filter_features(filter = !is.na(SUB_PATHWAY)) %>%
-  # log assay dimensions and number of columns for both metabolite and clinical annotations
-  mt_reporting_data() %>%
-  # heading for html file
-  mt_reporting_heading(heading = "Preprocessing", lvl=1) %>%
-  # heading for html file
-  mt_reporting_heading(heading = "Filtering", lvl = 2) %>%
-  # plot missingness distribution
-  mt_plots_missingness(feat_max=0.5) %>%
-  # filter metabolites with more than 50% missing values per group
-  mt_pre_filter_missingness(feat_max = 0.5, group_col = "Diagnosis") %>%
-  # plot missingness distribution after filtering
-  mt_plots_missingness(feat_max=0.5) %>%
-  # add missingness percentage as annotation to samples (remaining missing)
-  mt_anno_missingness(anno_type = "samples", out_col = "missing") %>%
-  # add missingness percentage as annotation to metabolites
-  mt_anno_missingness(anno_type = "features", out_col = "missing") %>%
-  # heading for html file
-  mt_reporting_heading(heading = "Normalization", lvl = 2) %>%
-  # plot sample boxplots
-  mt_plots_sample_boxplot(color=Diagnosis, title = "Original", plot_logged = T) %>%
-  # apply batch correction
-  mt_pre_batch_median(batch_col = "BOX.NUMBER") %>%
-  # plot sample boxplots after batch correction
-  mt_plots_sample_boxplot(color=Diagnosis, title = "After batch correction", plot_logged = T) %>%
-  # normalize abundances using probabilistic quotient
-  mt_pre_norm_quot(feat_max = 0.2, ref_samples = Diagnosis==0) %>%
-  # show dilution plot
-  mt_plots_dilution_factor(in_col="Diagnosis") %>%
-  # plot sample boxplots after normalization
-  mt_plots_sample_boxplot(color=Diagnosis, title = "After normalization", plot_logged = T) %>%
-  # log transform
-  mt_pre_trans_log() %>%
-  # impute missing values using knn
-  mt_pre_impute_knn() %>%
-  # plot sample boxplot after imputation
-  mt_plots_sample_boxplot(color=Diagnosis, title = "After imputation", plot_logged = T) %>%
-  # outlier detection (univariate)
-  mt_pre_outlier_detection_univariate() %>%
-  # print infos about dataset
-  mt_reporting_data() %>%
-  # heading for html file
-  mt_reporting_heading(heading = "Get Pathway Annotations", lvl = 1) %>%
-  # get KEGG ids from HMDB ids
-  mt_anno_hmdb_to_kegg(in_col = "HMDb", out_col = "KEGG_ids") %>%
-  # get pathway annotations
-  #   alternative functions: mt_anno_pathways_xls, mt_anno_pathways_graphite, mt_anno_pathways_uniprot
-  mt_anno_pathways_hmdb(in_col = "HMDb", out_col = "pathway", pwdb_name = "KEGG") %>%
-  # remove redundant
-  mt_anno_pathways_remove_redundant(feat_col = "KEGG_ids", pw_col = "pathway") %>%
-  # heading for html file
-  mt_reporting_heading(heading = "Global Statistics", lvl = 1) %>%
-  # plot PCA
-  mt_plots_pca(scale_data = T, title = "scaled PCA - Diagnosis", color=Diagnosis, size=2.5, ggadd=scale_size_identity()) %>%
-  # plot UMAP
-  mt_plots_umap(scale_data = T, title = "scaled UMAP - Diagnosis", color=Diagnosis, size=2.5, ggadd=scale_size_identity()) %>%
-  # plot heatmap
-  mt_plots_heatmap(scale_data = T, annotation_col = c("Diagnosis"), annotation_row = c("SUPER_PATHWAY"),
-                   clustering_method = "ward.D2", fontsize = 5, cutree_rows = 3, cutree_cols = 3, color=gplots::bluered(101)) %>%
-  {.}
-#### Differential analysis ----
-D %<>%
-  # heading for html file
-  mt_reporting_heading(heading = "Missingness analysis", lvl = 1) %>%
-  # compute Fisher's exact test
-  mt_stats_univ_missingness(in_col="Diagnosis", stat_name="missingness") %>%
-  # create p-value qq plot
-  mt_plots_pval_qq(stat_name = "missingness") %>%
-  # apply multiple testing correction
-  mt_post_multtest(stat_name="missingness", method="BH") %>%
-  # heading for html file
-  mt_reporting_heading(heading = "Statistical Analysis", lvl = 1) %>%
-  # heading for html file
-  mt_reporting_heading(heading = "Age analysis", lvl = 2) %>%
-  # # analysis
-  # p_diff_analysis(varname="Age", stat_name= "Age", alpha = 0.05, box_scatter = "scatter") %>%
-  # linear model
-  mt_stats_univ_lm(formula = as.formula(sprintf("~  %s","Age")), stat_name = "Age") %>%
-  # add multiple testing correction
-  mt_post_multtest(stat_name = "Age", method = "BH") %>%
-  # add stats logging
-  mt_reporting_stats(stat_name = "Age", stat_filter = p.adj < 0.05) %>%
-  # volcano plot as overview of results
-  mt_plots_volcano(stat_name = "Age",
-                   x = statistic,
-                   feat_filter = p.adj < 0.05,
-                   color = p.adj < 0.05) %>%
-  # scatter plot
-  mt_plots_box_scatter(stat_name = "Age",
-                       x = Age,
-                       plot_type = "scatter",
-                       feat_filter = p.adj < 0.05, 
-                       feat_sort = p.value,
-                       annotation = "{sprintf('P-value: %.2e', p.value)}\nP.adj: {sprintf('%.2e', p.adj)}") %>%
-  # barplot
-  mt_plots_stats_pathway_bar(stat_list = "Age",
-                             feat_filter = p.adj < 0.05,
-                             group_col = "SUB_PATHWAY",
-                             color_col = "SUPER_PATHWAY") %>%
-  # heading for html file
-  mt_reporting_heading(heading = "outcome1 analysis", lvl = 2) %>%
-  # # analysis
-  # p_diff_analysis(varname="outcome1", stat_name= "outcome1", alpha = 0.1, box_scatter = "scatter") %>%
-  # linear model
-  mt_stats_univ_lm(formula = as.formula(sprintf("~  %s","outcome1")), stat_name = "outcome1") %>%
-  # add multiple testing correction
-  mt_post_multtest(stat_name = "outcome1", method = "BH") %>%
-  # add stats logging
-  mt_reporting_stats(stat_name = "outcome1", stat_filter = p.adj < 0.1) %>%
-  # volcano plot as overview of results
-  mt_plots_volcano(stat_name = "outcome1",
-                   x = statistic,
-                   feat_filter = p.adj < 0.1,
-                   color = p.adj < 0.1) %>%
-  # scatter plot
-  mt_plots_box_scatter(stat_name = "outcome1",
-                       x = outcome1,
-                       plot_type = "scatter",
-                       feat_filter = p.adj < 0.1, 
-                       feat_sort = p.value,
-                       annotation = "{sprintf('P-value: %.2e', p.value)}\nP.adj: {sprintf('%.2e', p.adj)}") %>%
-  # barplot
-  mt_plots_stats_pathway_bar(stat_list = "outcome1",
-                             feat_filter = p.adj < 0.1,
-                             group_col = "SUB_PATHWAY",
-                             color_col = "SUPER_PATHWAY") %>%
-  # heading for html file
-  mt_reporting_heading(heading = "outcome2 analysis", lvl = 2) %>%
-  # # analysis
-  # p_diff_analysis(varname="outcome2", stat_name= "outcome2", alpha = 0.1, box_scatter = "scatter") %>%
-  # linear model
-  mt_stats_univ_lm(formula = as.formula(sprintf("~  %s","outcome2")), stat_name = "outcome2") %>%
-  # add multiple testing correction
-  mt_post_multtest(stat_name = "outcome2", method = "BH") %>%
-  # add stats logging
-  mt_reporting_stats(stat_name = "outcome2", stat_filter = p.adj < 0.1) %>%
-  # volcano plot as overview of results
-  mt_plots_volcano(stat_name = "outcome2",
-                   x = statistic,
-                   feat_filter = p.adj < 0.1,
-                   color = p.adj < 0.1) %>%
-  # scatter plot
-  mt_plots_box_scatter(stat_name = "outcome2",
-                       x = outcome2,
-                       plot_type = "scatter",
-                       feat_filter = p.adj < 0.1, 
-                       feat_sort = p.value,
-                       annotation = "{sprintf('P-value: %.2e', p.value)}\nP.adj: {sprintf('%.2e', p.adj)}") %>%
-  # barplot
-  mt_plots_stats_pathway_bar(stat_list = "outcome2",
-                             feat_filter = p.adj < 0.1,
-                             group_col = "SUB_PATHWAY",
-                             color_col = "SUPER_PATHWAY") %>%
-  # heading for html file
-  mt_reporting_heading(heading = "Diagnosis", lvl = 2) %>%
-  # # analysis
-  # p_diff_analysis(varname="Diagnosis", stat_name= "Diagnosis", alpha = 0.5, box_scatter = "box") %>%
-  # linear model
-  mt_stats_univ_lm(formula = as.formula(sprintf("~  %s","Diagnosis")), stat_name = "Diagnosis") %>%
-  # add multiple testing correction
-  mt_post_multtest(stat_name = "Diagnosis", method = "BH") %>%
-  # add stats logging
-  mt_reporting_stats(stat_name = "Diagnosis", stat_filter = p.adj < 0.5) %>%
-  # volcano plot as overview of results
-  mt_plots_volcano(stat_name = "Diagnosis",
-                   x = statistic,
-                   feat_filter = p.adj < 0.5,
-                   color = p.adj < 0.5) %>%
-  # scatter plot
-  mt_plots_box_scatter(stat_name = "Diagnosis",
-                       x = Diagnosis,
-                       plot_type = "box",
-                       feat_filter = p.adj < 0.5, # made very small because otherwise would take an eternity to generate all plots
-                       feat_sort = p.value,
-                       annotation = "{sprintf('P-value: %.2e', p.value)}\nP.adj: {sprintf('%.2e', p.adj)}") %>%
-  # barplot
-  mt_plots_stats_pathway_bar(stat_list = "Diagnosis",
-                             feat_filter = p.adj < 0.5,
-                             group_col = "SUB_PATHWAY",
-                             color_col = "SUPER_PATHWAY") %>%
-  # heading for html file
-  mt_reporting_heading(heading = "Results Overview", lvl = 1) %>%
-  # barplot
-  mt_plots_stats_pathway_bar(stat_list = c("Age","outcome1","outcome2","Diagnosis"),
-                             feat_filter = p.adj < 0.2,
-                             group_col = "SUB_PATHWAY",
-                             color_col = "SUPER_PATHWAY") %>%
-  {.}
+library(DT)
+library(plotly)
+
+# load SE
+load("SE.Rdata")
 
 # Extract all the object names for accessor functions
 obj_list <- data.frame()
@@ -241,6 +36,9 @@ obj_name <- cbind(order_id, obj_list, stat_name)
 obj_name$stat_name <- ifelse(is.na(obj_name$stat_name), 
                              "(no stat_name)", 
                              obj_name$stat_name)
+
+table_stats <- mtm_res_get_entries(D, c("stats", "univ"))
+plot_stats <- mtm_res_get_entries(D, c("plots", "stats"))
 
 # define PCA output function for mod3 referring 'mt_plots_pca'
 mod3_plots_pca <- function(D, title = "PCA", 
@@ -270,12 +68,12 @@ mod3_plots_pca <- function(D, title = "PCA",
   
   if (data_type == "scores") {
     df <- data.frame(x = pca$x[, pc1], 
-                    y = pca$x[, pc2], 
-                    colData(D)
-                    )
+                     y = pca$x[, pc2], 
+                     colData(D)
+    )
     colnames(df)[1:2] <- c(sprintf("PC%d", pc1), 
                            sprintf("PC%d", pc2)
-                           )
+    )
     ## reactivate plot title
     plot_title <- paste0(ifelse(scale_data,
                                 "Scaled ", 
@@ -326,8 +124,9 @@ mod3_plots_pca <- function(D, title = "PCA",
   ggplotly(p) %>%
     layout(legend = list(orientation = "h",   # show entries horizontally
                          xanchor = "center",  # use center of legend as anchor
-                         x = .5, ## set position of legend
-                         y = -.2),
+                         x = 0.5, ## set position of legend
+                         y = -0.2,
+                         tracegroupgap = 5),
            autosize = TRUE
     )
 }
@@ -377,18 +176,12 @@ mod3_plots_umap <- function (D, title = "UMAP",
     layout(legend = list(orientation = "h",   # show entries horizontally
                          xanchor = "center",  # use center of legend as anchor
                          x = .5,
-                         y = -.2),
+                         y = -.2,
+                         tracegroupgap = 5),
            autosize = TRUE
     )
   
 }
-# load packages
-library(shiny)
-library(shinyWidgets)
-library(maplet)
-library(tidyverse)
-library(DT)
-library(plotly)
 
 # Define UI for application
 ui <- fluidPage(
@@ -504,7 +297,46 @@ ui <- fluidPage(
                )
              )
     ),
-    tabPanel("Module 4", "contents"),
+    tabPanel("Module 4", 
+             sidebarLayout(
+               sidebarPanel(id = "mod4_panel1",
+                            # sidebar autoscroll with main panel
+                            style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
+                            tags$p(
+                              HTML("<b>Module 4</b> requires collection on all statistical results in a table given one metabolite name."
+                              )),
+                            tags$p(
+                              HTML("When clicking on one row, it should display interactive plots following the same orders in Module 2."
+                              )),
+                            # select one metabolite
+                            selectInput("mod4_metabolite", "Select one metabolite:",
+                                        width = "220px",
+                                        choices = arrange(mtm_res_get_entries(D, c("stats", "univ"))[[1]]$output$table, var)$var,
+                                        selected = "pantoate"
+                            ),
+                            br(),
+                            # delay the output
+                            actionButton("mod4_go", "Update")
+               ), 
+               mainPanel(id = "mod4_panel2", 
+                         br(), 
+                         br(), 
+                         br(), 
+                         style = "overflow-y: auto; position: absolute; left: 25%",
+                         # stats table
+                         dataTableOutput('mod4_table'),
+                         br(),
+                         # statsBar plotly
+                         plotlyOutput('mod4_stats_bar', height = 730),
+                         br(), 
+                         # equalizer plotly
+                         plotlyOutput('mod4_equalizer', height = 730),
+                         br(), 
+                         # box/scatter plotly
+                         plotlyOutput('mod4_box_scatter', height = 730)
+               )
+             )
+    ),
     tabPanel("Module 5", "contents"),
     tabPanel("Module 6", "contents")
   )
@@ -626,11 +458,7 @@ server <- function(input, output) {
       row_n <- ceiling(i/len_j)
       ## set dynamic height of box scatter plots based on output2
       height <- if(plots[[1]]$fun[2]=="box"&plots[[1]]$fun[3]=="scatter"&!is.null(plots[[row_n]]$output2)){
-        # (plots[[row_n]]$output2)*100
-        1200
-      } else if(plots[[1]]$fun[2]=="stats"){
-        ## set dynamic height of plot_stats based on `nr` in output2
-        (plots[[row_n]]$output2$nr)*20
+        (plots[[row_n]]$output2)*150
       } else {
         560
       }
@@ -659,14 +487,7 @@ server <- function(input, output) {
         output_order <- subset(output_order, stat_name==mod1_input_object()[2])
         plots <- list()
         for(plot_i in seq_along(output_order$order)){
-          if(mod1_input_object()[1]=="plots"&mod1_input_object()[3]=="box"){
-            ## only render top 10 pair objects for box-scatter plots
-            dat <- mtm_res_get_entries(D, c(mod1_input_object()[1], mod1_input_object()[3]))[[output_order$order[plot_i]]]$output
-            dat[[1]]$data <- dat[[1]]$data %>% head(10000)
-            plots[[plot_i]] <- dat
-          } else {
-            plots[[plot_i]] <- mtm_res_get_entries(D, c(mod1_input_object()[1], mod1_input_object()[3]))[[output_order$order[plot_i]]]$output
-          }
+          plots[[plot_i]] <- mtm_res_get_entries(D, c(mod1_input_object()[1], mod1_input_object()[3]))[[output_order$order[plot_i]]]$output
         }
         # there are multiple plots
         len_i <- length(plots)
@@ -689,24 +510,31 @@ server <- function(input, output) {
     output_order <- obj_name %>%
       mutate(order=seq(from=1, to=n()))
     output_order <- subset(output_order, stat_name==mod1_input_object()[2])
-    table <- mtm_res_get_entries(D, c(mod1_input_object()[1], mod1_input_object()[3]))[[output_order$order]]$output$table
+    table <- mtm_res_get_entries(D, c(mod1_input_object()[1], mod1_input_object()[3]))[[output_order$order]]$output$table %>%
+      ## scientific notation
+      mutate(statistic=formatC(statistic, format = "E", digits = 2),
+             p.value=formatC(p.value, format = "E", digits = 2),
+             p.adj=formatC(p.adj, format = "E", digits = 2)
+      )
     
     ## put interested columns ahead
     table <- if ('term' %in% names(table)) {
       table %>%
-        select(var, term, statistic, p.value, p.adj, everything())
+        select(var, statistic, p.value, p.adj, term, everything())
     } else {
       table %>%
         select(var, statistic, p.value, p.adj, everything())
     }
     datatable(table,
               options = list(
-                paging =TRUE,
                 # limit number of rows
-                pageLength =  10)) %>%
-      # set two significant decimals
-      formatSignif(columns=c("statistic", "p.value", "p.adj"), 
-                  digits=2)
+                pageLength =  10,
+                lengthMenu = c(10, 20, 50),
+                ## set column width
+                autoWidth = TRUE,
+                columnDefs = list(list(width = '50px', targets = c(2:4))),
+                scrollX = TRUE
+              ))
   })
   # render plots or table
   output$mod1_output <- renderUI({
@@ -735,6 +563,70 @@ server <- function(input, output) {
       )
     } 
   })
+  
+  
+  # create reactive inputs list
+  mod4_metabolite_table <- 
+    eventReactive(input$mod4_go,
+                  {
+                    table <- data.frame()
+                    for (i in 2:length(table_stats)){
+                      tab <- table_stats[[i]]$output$table %>%
+                        mutate(`stat name`=table_stats[[i]]$output$outcome)
+                      table <- rbind(table, tab)
+                    }
+                    table <- table %>%
+                      select(var, statistic, p.value, p.adj, `stat name`, estimate, std.error) %>%
+                      mutate(statistic=formatC(statistic, format = "E", digits = 2),
+                             p.value=formatC(p.value, format = "E", digits = 2),
+                             p.adj=formatC(p.adj, format = "E", digits = 2),
+                             estimate=formatC(estimate, format = "E", digits = 2),
+                             std.error=formatC(std.error, format = "E", digits = 2)
+                      ) %>%
+                      filter(var==input$mod4_metabolite)
+                  }
+    )
+  
+  # render stats table of Mod4
+  output$mod4_table <- renderDataTable({
+    datatable(mod4_metabolite_table(),
+              selection = "single",
+              options = list(
+                dom = 't',
+                # limit number of rows
+                pageLength =  10,
+                lengthMenu = c(10, 20, 50)
+              )
+    )
+  })
+  # catch the selected row
+  v <- reactiveValues()
+  v$s <- NULL
+  observe({
+    if(!is.null(input$mod4_table_rows_selected)){
+      v$s <- input$mod4_table_rows_selected
+    }
+  })
+  
+  # render statsBar plot in Mod4
+  output$mod4_stats_bar <- renderPlotly({
+    for (i in 2:length(plot_stats)) {
+      value <- mod4_metabolite_table() %>%
+        slice(v$s) %>%
+        select(`stat name`)
+      
+      if (plot_stats[[i-1]]$args$stat_list == value) {
+        plot <- plot_stats[[i-1]]$output[[1]]
+      }
+    }
+    ggplotly(plot) %>% 
+      layout(dragmode = "lasso")
+  })
+  # # render equilizer plot in Mod4
+  # output$mod4_equalizer <- renderPlotly({
+  #     d <- event_data("plotly_click", source = "sub_bar")
+  #     eqplot
+  # })
 }
 
 # Run the application 

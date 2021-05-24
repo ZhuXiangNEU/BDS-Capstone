@@ -308,6 +308,9 @@ ui <- fluidPage(
         tabPanel("Module 2",
                  fluidRow(column(
                      width = 10,
+                     br(),
+                     br(),
+                     br(),
                      selectInput(
                          "mod2.stat",
                          "Select one stat name:",
@@ -315,15 +318,19 @@ ui <- fluidPage(
                                                          obj_name$V2 == "stats", ],
                                             stat_name)$stat_name,
                          selected  = "outcome1"
-                     ),
-                     plotlyOutput("mod2.bar", height = 600),
-                     br())), 
+                     ))),
                  fluidRow(column(width = 10,
+                                 downloadButton("download_plotly_bar", "download bar plot"),
+                                 plotlyOutput("mod2.bar", height = 600),
+                                 br())), 
+                 fluidRow(column(width = 10,
+                                 downloadButton("download_plotly_volcano", "download volcano plot"),
                                  plotlyOutput("mod2.vol", height = 400),
                                  br())),
                  fluidRow(column(width = 10,
+                                 downloadButton("download_plotly_scatter", "download scatter plot"),
                                  plotlyOutput("mod2.box", height = 400)))
-                 ), 
+        ), 
         
         
         # Module 3
@@ -348,6 +355,8 @@ ui <- fluidPage(
 
 server <- function(input, output, session) {
     
+    session_store <- reactiveValues()
+    
     #
     output$mod2.bar <- renderPlotly({
         plots <- mtm_res_get_entries(D, c("plots", "stats"))
@@ -356,8 +365,22 @@ server <- function(input, output, session) {
                 plot <- plots[[i]]$output[[1]]
             }
         }
-        ggplotly(plot, source = "sub_bar") %>% layout(dragmode = "lasso")
+        session_store$bar <- ggplotly(plot, source = "sub_bar") %>%
+            layout(dragmode = "lasso")
+        # render plotly graph
+        session_store$bar
     })
+    
+    # 
+    output$download_plotly_bar <- downloadHandler(
+        filename = function() {
+            paste("data-", Sys.Date(), ".html", sep = "")
+        },
+        content = function(file) {
+            # export plotly html widget as a temp file to download.
+            saveWidget(as_widget(session_store$bar), file, selfcontained = TRUE)
+        }
+    )
     
     #
     output$mod2.vol <- renderPlotly({
@@ -385,16 +408,28 @@ server <- function(input, output, session) {
             data_vol <- data_vol[data_vol$name %in% names, ]
             
             plot <- data_vol %>% ggplot(aes(x = statistic, y = p.value)) +
-                geom_point() +
+                geom_point(aes(text = paste0("Formula:", formula))) +
                 scale_y_continuous(trans = reverselog_trans(10),
                                    breaks = scales::trans_breaks("log10", function(x) 10^x),
                                    labels = scales::trans_format("log10", scales::math_format(10^.x))) +
                 labs(y = "p-value") +
-                ggtitle(input$mod2.stat) +
+                ggtitle(paste0(input$mod2.stat, "-", name)) +
                 ggrepel::geom_text_repel(aes(label = name), max.overlaps = Inf)
-            ggplotly(plot, source = "sub_vol") %>% layout(dragmode = "lasso")
+            session_store$vol <- ggplotly(plot, source = "sub_vol") %>%
+                layout(dragmode = "lasso")
+            session_store$vol
         }
     })
+    
+    # 
+    output$download_plotly_volcano <- downloadHandler(
+        filename = function() {
+            paste("data-", Sys.Date(), ".html", sep = "")
+        },
+        content = function(file) {
+            saveWidget(as_widget(session_store$vol), file, selfcontained = TRUE)
+        }
+    )
     
     #
     output$mod2.box <- renderPlotly({
@@ -435,19 +470,39 @@ server <- function(input, output, session) {
             p.value <- signif(mean(data_box$p.value), 3)
             p.adj <- signif(mean(data_box$p.adj), 3)
             plot <- data_box %>%
-                ggplot(aes_string(x = input$mod2.stat, y = "value")) +
-                geom_point() +
+                ggplot(aes_string(x = input$mod2.stat,
+                                  y = "value")) +
+                geom_point(aes(text = paste0("Name:", name))) +
                 geom_smooth(method = "lm", se = FALSE) +
-                ggtitle(name2) +
-                annotate("text",x=-Inf,y=Inf,hjust=0,vjust=2,label=paste0("P-value: ", p.value)) +
-                annotate("text",x=-Inf,y=-Inf,hjust=0,vjust=-1,label=paste0("P.adj: ", p.adj))
-            ggplotly(plot) %>% layout(dragmode = "lasso")
+                ggtitle(paste0(input$mod2.stat, "-", name, "-", name2))
+            session_store$box <- ggplotly(plot) %>%
+                layout(dragmode = "lasso") %>%
+                add_annotations(
+                    x = min(data_box$Age) + 5,
+                    y = max(data_box$value),
+                    text = paste0("P-value: ", p.value),
+                    showarrow = F
+                ) %>%
+                add_annotations(
+                    x = min(data_box$Age) + 5,
+                    y = max(data_box$value) - 1,
+                    text = paste0("P.adj: ", p.adj),
+                    showarrow = F
+                )
+            session_store$box
         }
     })
+    
+    # 
+    output$download_plotly_scatter <- downloadHandler(
+        filename = function() {
+            paste("data-", Sys.Date(), ".html", sep = "")
+        },
+        content = function(file) {
+            saveWidget(as_widget(session_store$box), file, selfcontained = TRUE)
+        }
+    )
 }
 
 
 shinyApp(ui = ui, server = server)
-
-
-

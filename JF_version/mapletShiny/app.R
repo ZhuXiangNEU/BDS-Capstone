@@ -607,7 +607,20 @@ server <- function(input, output) {
         # locate the column in the `plots`
         col_n <- ifelse((my_i %% len_j)==0, len_j, (my_i %% len_j))
         # render the plot object in each loop
-        plots[[row_n]][col_n]
+        if(mod1_input_object()[3]=="box"){
+          # this is the initial full plot
+          p <- plots[[1]]
+          # filter plot data
+          n_plots <- 2 ## this value is just a test
+          p$data <- p$data %>%
+            subset(p$data$name %in% unique(as.character(p$data$name))[1:n_plots])
+          p$layers[[3]]$data <- p$layers[[3]]$data %>%
+            subset(p$layers[[3]]$data$name %in% unique(as.character(p$data$name)))
+          # reduced plot
+          p
+        } else {
+          plots[[row_n]][col_n]
+        }
         
       })
     })

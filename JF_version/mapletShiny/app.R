@@ -45,6 +45,15 @@ box_obj_name <- subset(box_obj_name, V2=="box")
 box_output_order <- box_obj_name %>%
   mutate(order=seq(from=1, to=n()))
 
+## SCALE -log10
+reverselog_trans <- function (base = exp(1)){
+  trans <- function(x) -log(x, base)
+  inv <- function(x) base^(-x)
+  scales::trans_new(paste0("reverselog-", format(base)), trans, inv,
+                    scales::log_breaks(base = base),
+                    domain = c(1e-100, Inf))
+}
+
 # define PCA output function for mod3 referring 'mt_plots_pca'
 mod3_plots_pca <- function(D, title = "PCA", 
                            ## scale argument
@@ -332,7 +341,66 @@ ui <- fluidPage(
                )
              )
     ), 
-    tabPanel("Module 2", 
+    tabPanel("Module 2",
+             sidebarLayout(
+               sidebarPanel(
+                 id = "mod2_panel1",
+                 # sidebar auto-scrolling with main panel
+                 style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
+                 tags$p(
+                   HTML(
+                     "<b>Module 2:</b> StatsBar plot -> Equalizer/Volcano plot -> Box/Scatter plot."
+                   )
+                 ),
+                 tags$p(
+                   HTML(
+                     "Given a SE and a statname, display a series of interactive plots at different granularities."
+                   )
+                 ),
+                 br(),
+                 selectInput(
+                   "mod2.stat",
+                   "Select one stat name:",
+                   choices = distinct(obj_name[obj_name$V1 == "plots" &
+                                                 obj_name$V2 == "stats",],
+                                      stat_name)$stat_name
+                 ),
+                 br(),
+                 radioButtons(
+                   "mod2.plot2",
+                   "Select plot2 type:",
+                   choices = list("Equalizer" = "equalizer",
+                                  "Volcano" = "volcano"),
+                   selected  = "volcano"
+                 ),
+                 br(),
+                 radioButtons("mod2.plot3",
+                              "Select plot3 type:",
+                              choices = list("Box" = "box",
+                                             "Scatter" = "scatter"),
+                              selected  = "scatter"
+                 ),
+                 br(),
+                 actionButton("mod2_go", "Update")
+               ),
+               mainPanel(
+                 id = "mod2_panel2",
+                 style = "overflow-y: auto; position: absolute; left: 25%",
+                 br(),
+                 br(),
+                 br(),
+                 style = "overflow-y: auto; position: absolute; left: 25%",
+                 downloadButton("mod2_download_plotly_bar", "download bar plot"),
+                 plotlyOutput("mod2.bar", height = 600),
+                 br(),
+                 downloadButton("mod2_download_plotly_volcano", "download volcano plot"),
+                 plotlyOutput("mod2.vol", height = 600),
+                 br(),
+                 downloadButton("mod2_download_plotly_scatter", "download scatter plot"),
+                 plotlyOutput("mod2.box", height = 400),
+                 br()
+               )
+             ) 
     ),
     tabPanel("Module 3", 
              sidebarLayout(
@@ -404,12 +472,15 @@ ui <- fluidPage(
                          dataTableOutput('mod4_table'),
                          br(),
                          # statsBar plotly
+                         downloadButton("mod4_download_plotly_bar", "download bar plot"),
                          plotlyOutput('mod4_stats_bar', height = 730),
                          br(), 
                          # equalizer plotly
-                         plotlyOutput('mod4_equalizer', height = 730),
+                         downloadButton("mod4_download_plotly_bar", "download equalizer plot"),
+                         plotlyOutput('mod4_volcano', height = 730),
                          br(), 
                          # box/scatter plotly
+                         downloadButton("mod4_download_plotly_bar", "download scatter plot"),
                          plotlyOutput('mod4_box_scatter', height = 730)
                )
              )
@@ -423,14 +494,6 @@ ui <- fluidPage(
 
 # Define server logic required to draw outputs
 server <- function(input, output) {
-  ## get the order of selected stat_name
-  ord <- reactive({
-    if(input$mod1_select_statname %in% box_output_order$stat_name){
-      box_output_order[box_output_order$stat_name==input$mod1_select_statname, ]$order
-    } else {
-      1
-    }
-  })
   ## create indicator of box plot output
   box_switch <- reactive({
     if (input$mod1_select_object=="box"){
@@ -454,6 +517,14 @@ server <- function(input, output) {
                 width = "220px",
                 choices = distinct(obj_name[obj_name$V1==input$mod1_radio, ], stat_name)$stat_name
     )
+  })
+  ## get the order of selected stat_name
+  ord <- reactive({
+    if(input$mod1_select_statname %in% box_output_order$stat_name){
+      box_output_order[box_output_order$stat_name==input$mod1_select_statname, ]$order
+    } else {
+      1
+    }
   })
   # create object list dependent on radio button and stat_name
   output$mod1_select_object_ui <- renderUI({
@@ -607,20 +678,7 @@ server <- function(input, output) {
         # locate the column in the `plots`
         col_n <- ifelse((my_i %% len_j)==0, len_j, (my_i %% len_j))
         # render the plot object in each loop
-        if(mod1_input_object()[3]=="box"){
-          # this is the initial full plot
-          p <- plots[[1]]
-          # filter plot data
-          n_plots <- 2 ## this value is just a test
-          p$data <- p$data %>%
-            subset(p$data$name %in% unique(as.character(p$data$name))[1:n_plots])
-          p$layers[[3]]$data <- p$layers[[3]]$data %>%
-            subset(p$layers[[3]]$data$name %in% unique(as.character(p$data$name)))
-          # reduced plot
-          p
-        } else {
-          plots[[row_n]][col_n]
-        }
+        plots[[row_n]][col_n]
         
       })
     })
@@ -722,6 +780,7 @@ server <- function(input, output) {
               )
     )
   })
+  
   # catch the selected row
   v <- reactiveValues()
   v$s <- NA
@@ -746,26 +805,329 @@ server <- function(input, output) {
     ggplotly(plot, source = "sub_bar") %>% 
       layout(dragmode = "lasso")
   })
-  # render equilizer plot in Mod4
-  output$mod4_equalizer <- renderPlotly({
-    ## catch clicking data
+  # 
+  output$mod4_download_plotly_bar <- downloadHandler(
+    filename = function() {
+      paste("data-", Sys.Date(), ".html", sep = "")
+    },
+    content = function(file) {
+      # export plotly html widget as a temp file to download.
+      saveWidget(as_widget(output$mod4_stats_bar), file, selfcontained = TRUE)
+    }
+  )
+  # render volcano plot in Mod4
+  output$mod4_volcano <- renderPlotly({
     d <- event_data("plotly_click", source = "sub_bar")
-    bio_pathway <- left_join(as.data.frame(rowData(D)), rd, by="BIOCHEMICAL") %>%
-      select(BIOCHEMICAL, SUB_PATHWAY, pathway_name)
     if (!is.null(d)) {
-      ## extract label of clicking data
-      stat_data <- plot_stats[[1]]$output[[1]]$data
-      lvls <- rev(levels(stat_data$label))
+      plots_bar <- mtm_res_get_entries(D, c("plots", "stats"))
+      for (i in seq_along(plots_bar)) {
+        if (plots_bar[[i]]$args$stat_list == stat_name_selected()) {
+          data_bar <- plots_bar[[i]]$output[[1]]$data
+        }
+      }
+      lvls <- rev(levels(data_bar$label))
       label <- lvls[round(as.numeric(d$y))]
-      ## select a sub-pathway by clicking one bar of statsBar plot
-      sub_pathway_selected <- stat_data[stat_data$label == label, ]$name
-      ## match corresponding pathway
-      pathway_selected <- bio_pathway[bio_pathway$SUB_PATHWAY==sub_pathway_selected, ]$pathway_name[1]
-      ## equilizer plot
-      statName <- stat_name_selected()
-      eqplot$statName$pathway_selected
+      name <- data_bar[data_bar$label == label, ]$name
+      
+      plots_vol <- mtm_res_get_entries(D, c("plots", "volcano"))
+      for (i in seq_along(plots_vol)) {
+        if (plots_vol[[i]]$args$stat_name == stat_name_selected()) {
+          data_vol <- plots_vol[[i]]$output[[1]]$data
+        }
+      }
+      
+      row_data <- rowData(D) %>% data.frame()
+      names <- unlist(row_data[row_data$SUB_PATHWAY == name,]$name)
+      data_vol$isSelected <- data_vol$name %in% names
+      data_vol$text <- ifelse(data_vol$name %in% names, data_vol$name, "")
+      
+      t <- list(family = "sans serif", size = 14, color = toRGB("grey50"))
+      
+      plot <- data_vol %>%
+        ggplot(aes(x = statistic, y = p.value, color = isSelected)) +
+        geom_point(aes(text = name)) +
+        scale_y_continuous(trans = reverselog_trans(10),
+                           breaks = scales::trans_breaks("log10", function(x) 10^x),
+                           labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+        labs(y = "p-value") +
+        ggtitle(paste0(stat_name_selected(), "-", name)) +
+        ggrepel::geom_text_repel(aes(label = name), max.overlaps = Inf)
+      
+      ggplotly(plot, source = "sub_vol") %>%
+        layout(dragmode = "lasso",
+               legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3)) %>%
+        add_text(text=~data_vol$text,
+                 textposition="top right",
+                 showlegend = T)
     }
   })
+  
+  # 
+  output$mod4_download_plotly_volcano <- downloadHandler(
+    filename = function() {
+      paste("data-", Sys.Date(), ".html", sep = "")
+    },
+    content = function(file) {
+      saveWidget(as_widget(output$mod4_volcano), file, selfcontained = TRUE)
+    }
+  )
+  
+  #
+  output$mod4_box_scatter <- renderPlotly({
+    d1 <- event_data("plotly_click", source = "sub_bar")
+    d2 <- event_data("plotly_click", source = "sub_vol")
+    if (!is.null(d1) & !is.null(d2)) {
+      plots_bar <- mtm_res_get_entries(D, c("plots", "stats"))
+      for (i in seq_along(plots_bar)) {
+        if (plots_bar[[i]]$args$stat_list == stat_name_selected()) {
+          data_bar <- plots_bar[[i]]$output[[1]]$data
+        }
+      }
+      lvls <- rev(levels(data_bar$label))
+      label <- lvls[round(as.numeric(d1$y))]
+      name <- data_bar[data_bar$label == label, ]$name
+      
+      plots_vol <- mtm_res_get_entries(D, c("plots", "volcano"))
+      for (i in seq_along(plots_vol)) {
+        if (plots_vol[[i]]$args$stat_name == stat_name_selected()) {
+          data_vol <- plots_vol[[i]]$output[[1]]$data
+        }
+      }
+      
+      row_data <- rowData(D) %>% data.frame()
+      names <- unlist(row_data[row_data$SUB_PATHWAY == name,]$name)
+      data_vol <- data_vol[data_vol$name %in% names, ]
+      name2 <- data_vol[as.numeric(d2$pointNumber) + 1, ]$name[1]
+      
+      rd <- rowData(D) %>%
+        as.data.frame() %>%
+        dplyr::mutate(var = rownames(D))
+      
+      stat <- maplet::mtm_get_stat_by_name(D, stat_name_selected()) %>%
+        dplyr::inner_join(rd, by = "var")
+      
+      data_box <- D %>%
+        maplet:::mti_format_se_samplewise() %>%
+        tidyr::gather(var, value, dplyr::one_of(rownames(D)))%>%
+        dplyr::rename("Age Regression" = "Age",
+                      "Comparison Outcome1" = "outcome1",
+                      "Comparison Outcome2" = "outcome2",
+                      "Diagnosis Analysis" = "Diagnosis") %>%
+        dplyr::select(dplyr::one_of(c("var","value", stat_name_selected()))) %>%
+        dplyr::inner_join(stat[,dplyr::intersect(colnames(stat),
+                                                 c('var','statistic','p.value','p.adj','name'))], by = "var") %>%
+        dplyr::select(-var)
+      
+      data_box <- data_box[data_box$name==name2, ]
+      p.value <- signif(mean(data_box$p.value), 3)
+      p.adj <- signif(mean(data_box$p.adj), 3)
+      plot <- data_box %>%
+        ggplot(aes(x = !!sym(input$mod2.stat),
+                   y = value)) +
+        geom_point(aes(text = paste0("Name:", name))) +
+        geom_smooth(method = "lm", se = FALSE) +
+        ggtitle(paste0(input$mod2.stat, "-", name, "-", name2))
+      
+      ggplotly(plot) %>%
+        layout(dragmode = "lasso") %>%
+        add_annotations(
+          x = min(data_box$Age) + 5,
+          y = max(data_box$value),
+          text = paste0("P-value: ", p.value),
+          showarrow = F
+        ) %>%
+        add_annotations(
+          x = min(data_box$Age) + 5,
+          y = max(data_box$value) - 1,
+          text = paste0("P.adj: ", p.adj),
+          showarrow = F
+        )
+    }
+  })
+  
+  # 
+  output$mod4_download_plotly_scatter <- downloadHandler(
+    filename = function() {
+      paste("data-", Sys.Date(), ".html", sep = "")
+    },
+    content = function(file) {
+      saveWidget(as_widget(output$mod4_box_scatter), file, selfcontained = TRUE)
+    }
+  )
+  
+  # create reactive inputs list
+  mod2_input_object <- eventReactive(input$mod2_go, 
+                                     {c(input$mod2.stat,
+                                        input$mod2.plot2,
+                                        input$mod2.plot3)}
+  )
+  
+  #
+  output$mod2.bar <- renderPlotly({
+    inputs <- mod2_input_object()
+    plots <- mtm_res_get_entries(D, c("plots", "stats"))
+    for (i in seq_along(plots)) {
+      if (plots[[i]]$args$stat_list == inputs[1]) {
+        plot <- plots[[i]]$output[[1]]
+      }
+    }
+    ggplotly(plot, source = "sub_bar") %>%
+      layout(dragmode = "lasso",
+             legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3))
+  })
+  
+  # 
+  output$mod2_download_plotly_bar <- downloadHandler(
+    filename = function() {
+      paste("data-", Sys.Date(), ".html", sep = "")
+    },
+    content = function(file) {
+      # export plotly html widget as a temp file to download.
+      saveWidget(as_widget(output$mod2.bar), file, selfcontained = TRUE)
+    }
+  )
+  
+  output$mod2.vol <- renderPlotly({
+    inputs <- mod2_input_object()
+    d <- event_data("plotly_click", source = "sub_bar")
+    if (!is.null(d)) {
+      plots_bar <- mtm_res_get_entries(D, c("plots", "stats"))
+      for (i in seq_along(plots_bar)) {
+        if (plots_bar[[i]]$args$stat_list == inputs[1]) {
+          data_bar <- plots_bar[[i]]$output[[1]]$data
+        }
+      }
+      lvls <- rev(levels(data_bar$label))
+      label <- lvls[round(as.numeric(d$y))]
+      name <- data_bar[data_bar$label == label, ]$name
+      
+      plots_vol <- mtm_res_get_entries(D, c("plots", "volcano"))
+      for (i in seq_along(plots_vol)) {
+        if (plots_vol[[i]]$args$stat_name == inputs[1]) {
+          data_vol <- plots_vol[[i]]$output[[1]]$data
+        }
+      }
+      
+      row_data <- rowData(D) %>% data.frame()
+      names <- unlist(row_data[row_data$SUB_PATHWAY == name,]$name)
+      data_vol$isSelected <- data_vol$name %in% names
+      data_vol$text <- ifelse(data_vol$name %in% names, data_vol$name, "")
+      
+      t <- list(family = "sans serif", size = 14, color = toRGB("grey50"))
+      
+      plot <- data_vol %>%
+        ggplot(aes(x = statistic, y = p.value, color = isSelected)) +
+        geom_point(aes(text = name)) +
+        scale_y_continuous(trans = reverselog_trans(10),
+                           breaks = scales::trans_breaks("log10", function(x) 10^x),
+                           labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+        labs(y = "p-value") +
+        ggtitle(paste0(inputs[1], "-", name)) +
+        ggrepel::geom_text_repel(aes(label = name), max.overlaps = Inf)
+      
+      ggplotly(plot, source = "sub_vol") %>%
+        layout(dragmode = "lasso",
+               legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3)) %>%
+        add_text(text=~data_vol$text,
+                 textposition="top right",
+                 showlegend = T)
+    }
+  })
+  
+  # 
+  output$mod2_download_plotly_volcano <- downloadHandler(
+    filename = function() {
+      paste("data-", Sys.Date(), ".html", sep = "")
+    },
+    content = function(file) {
+      saveWidget(as_widget(output$mod2.vol), file, selfcontained = TRUE)
+    }
+  )
+  
+  #
+  output$mod2.box <- renderPlotly({
+    inputs <- mod2_input_object()
+    d1 <- event_data("plotly_click", source = "sub_bar")
+    d2 <- event_data("plotly_click", source = "sub_vol")
+    if (!is.null(d1) & !is.null(d2)) {
+      plots_bar <- mtm_res_get_entries(D, c("plots", "stats"))
+      for (i in seq_along(plots_bar)) {
+        if (plots_bar[[i]]$args$stat_list == inputs[1]) {
+          data_bar <- plots_bar[[i]]$output[[1]]$data
+        }
+      }
+      lvls <- rev(levels(data_bar$label))
+      label <- lvls[round(as.numeric(d1$y))]
+      name <- data_bar[data_bar$label == label, ]$name
+      
+      plots_vol <- mtm_res_get_entries(D, c("plots", "volcano"))
+      for (i in seq_along(plots_vol)) {
+        if (plots_vol[[i]]$args$stat_name == inputs[1]) {
+          data_vol <- plots_vol[[i]]$output[[1]]$data
+        }
+      }
+      
+      row_data <- rowData(D) %>% data.frame()
+      names <- unlist(row_data[row_data$SUB_PATHWAY == name,]$name)
+      data_vol <- data_vol[data_vol$name %in% names, ]
+      name2 <- data_vol[as.numeric(d2$pointNumber) + 1, ]$name[1]
+      
+      rd <- rowData(D) %>%
+        as.data.frame() %>%
+        dplyr::mutate(var = rownames(D))
+      
+      stat <- maplet::mtm_get_stat_by_name(D, inputs[1]) %>%
+        dplyr::inner_join(rd, by = "var")
+      
+      data_box <- D %>%
+        maplet:::mti_format_se_samplewise() %>%
+        tidyr::gather(var, value, dplyr::one_of(rownames(D)))%>%
+        dplyr::rename("Age Regression" = "Age",
+                      "Comparison Outcome1" = "outcome1",
+                      "Comparison Outcome2" = "outcome2",
+                      "Diagnosis Analysis" = "Diagnosis") %>%
+        dplyr::select(dplyr::one_of(c("var","value", inputs[1]))) %>%
+        dplyr::inner_join(stat[,dplyr::intersect(colnames(stat),
+                                                 c('var','statistic','p.value','p.adj','name'))], by = "var") %>%
+        dplyr::select(-var)
+      
+      data_box <- data_box[data_box$name==name2, ]
+      p.value <- signif(mean(data_box$p.value), 3)
+      p.adj <- signif(mean(data_box$p.adj), 3)
+      plot <- data_box %>%
+        ggplot(aes(x = !!sym(input$mod2.stat),
+                   y = value)) +
+        geom_point(aes(text = paste0("Name:", name))) +
+        geom_smooth(method = "lm", se = FALSE) +
+        ggtitle(paste0(input$mod2.stat, "-", name, "-", name2))
+      
+      ggplotly(plot) %>%
+        layout(dragmode = "lasso") %>%
+        add_annotations(
+          x = min(data_box$Age) + 5,
+          y = max(data_box$value),
+          text = paste0("P-value: ", p.value),
+          showarrow = F
+        ) %>%
+        add_annotations(
+          x = min(data_box$Age) + 5,
+          y = max(data_box$value) - 1,
+          text = paste0("P.adj: ", p.adj),
+          showarrow = F
+        )
+    }
+  })
+  
+  # 
+  output$mod2_download_plotly_scatter <- downloadHandler(
+    filename = function() {
+      paste("data-", Sys.Date(), ".html", sep = "")
+    },
+    content = function(file) {
+      saveWidget(as_widget(output$mod2.box), file, selfcontained = TRUE)
+    }
+  )
+  
 }
 
 # Run the application 

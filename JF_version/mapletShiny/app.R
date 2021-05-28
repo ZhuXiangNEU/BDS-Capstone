@@ -494,7 +494,7 @@ ui <- fluidPage(
 
 
 # Define server logic required to draw outputs
-server <- function(input, output, session) {
+server <- function(input, output) {
   session_store <- reactiveValues()
   ## create indicator of box plot output
   box_switch <- reactive({
@@ -794,17 +794,16 @@ server <- function(input, output, session) {
   })
   
   # catch the selected row
-  v <- reactiveValues()
-  v$s <- NA
+  session_store$s <- NA
   observe({
     if(!is.null(input$mod4_table_rows_selected)){
-      v$s <- input$mod4_table_rows_selected
+      session_store$s <- input$mod4_table_rows_selected
     }
   })
   ## extract the stat_name
   stat_name_selected <- reactive({
     mod4_metabolite_table() %>% 
-      slice(round(as.numeric(v$s))) %>%
+      slice(round(as.numeric(session_store$s))) %>%
       select(`stat name`)
   })
   # render statsBar plot in Mod4
@@ -833,7 +832,7 @@ server <- function(input, output, session) {
     d <- event_data("plotly_click", source = "sub_bar")
     if (!is.null(d)) {
       plots_bar <- mtm_res_get_entries(D, c("plots", "stats"))
-      for (i in seq_along(plots_bar)) {
+      for (i in 1:(length(plots_bar)-1)) {
         if (plots_bar[[i]]$args$stat_list == stat_name_selected()) {
           data_bar <- plots_bar[[i]]$output[[1]]$data
         }
@@ -865,14 +864,13 @@ server <- function(input, output, session) {
         labs(y = "p-value") +
         ggtitle(paste0(stat_name_selected(), "-", name)) +
         ggrepel::geom_text_repel(aes(label = name), max.overlaps = Inf)
-      
-      session_store$mod4_volcano <- ggplotly(plot, source = "sub_vol") %>%
+      session_store$mod4_vol <- ggplotly(plot, source = "sub_vol") %>%
         layout(dragmode = "lasso",
                legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3)) %>%
         add_text(text=~data_vol$text,
                  textposition="top right",
                  showlegend = T)
-      session_store$mod4_volcano
+      session_store$mod4_vol
     }
   })
   
@@ -882,7 +880,7 @@ server <- function(input, output, session) {
       paste("data-", Sys.Date(), ".html", sep = "")
     },
     content = function(file) {
-      saveWidget(as_widget(session_store$mod4_volcano), file, selfcontained = TRUE)
+      saveWidget(as_widget(session_store$mod4_vol), file, selfcontained = TRUE)
     }
   )
   
@@ -892,7 +890,7 @@ server <- function(input, output, session) {
     d2 <- event_data("plotly_click", source = "sub_vol")
     if (!is.null(d1) & !is.null(d2)) {
       plots_bar <- mtm_res_get_entries(D, c("plots", "stats"))
-      for (i in seq_along(plots_bar)) {
+      for (i in 1:(length(plots_bar)-1)) {
         if (plots_bar[[i]]$args$stat_list == stat_name_selected()) {
           data_bar <- plots_bar[[i]]$output[[1]]$data
         }
@@ -936,13 +934,12 @@ server <- function(input, output, session) {
       p.value <- signif(mean(data_box$p.value), 3)
       p.adj <- signif(mean(data_box$p.adj), 3)
       plot <- data_box %>%
-        ggplot(aes(x = !!sym(input$mod2.stat),
+        ggplot(aes(x = !!sym(stat_name_selected()),
                    y = value)) +
         geom_point(aes(text = paste0("Name:", name))) +
         geom_smooth(method = "lm", se = FALSE) +
-        ggtitle(paste0(input$mod2.stat, "-", name, "-", name2))
-      
-      session_store$mod4_box_scatter <- ggplotly(plot) %>%
+        ggtitle(paste0(stat_name_selected(), "-", name, "-", name2))
+      session_store$mod4_box <- ggplotly(plot) %>%
         layout(dragmode = "lasso") %>%
         add_annotations(
           x = min(data_box$Age) + 5,
@@ -956,9 +953,8 @@ server <- function(input, output, session) {
           text = paste0("P.adj: ", p.adj),
           showarrow = F
         )
-      output$mod4_box_scatter
+      session_store$mod4_box
     }
-    
   })
   
   # 
@@ -967,7 +963,7 @@ server <- function(input, output, session) {
       paste("data-", Sys.Date(), ".html", sep = "")
     },
     content = function(file) {
-      saveWidget(as_widget(session_store$mod4_box_scatter), file, selfcontained = TRUE)
+      saveWidget(as_widget(session_store$mod4_box), file, selfcontained = TRUE)
     }
   )
   
@@ -990,6 +986,7 @@ server <- function(input, output, session) {
     session_store$mod2.bar <- ggplotly(plot, source = "sub_bar") %>%
       layout(dragmode = "lasso",
              legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3))
+    session_store$mod2.bar
   })
   
   # 
@@ -1047,6 +1044,7 @@ server <- function(input, output, session) {
         add_text(text=~data_vol$text,
                  textposition="top right",
                  showlegend = T)
+      session_store$mod2.vol
     }
   })
   
@@ -1131,6 +1129,7 @@ server <- function(input, output, session) {
           text = paste0("P.adj: ", p.adj),
           showarrow = F
         )
+      session_store$mod2.box
     }
   })
   

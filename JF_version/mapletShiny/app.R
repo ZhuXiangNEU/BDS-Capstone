@@ -311,7 +311,7 @@ ui <- fluidPage(
                             radioButtons("mod1_radio", "Select output type:",
                                          choices = list("Plot" = "plots", 
                                                         "Table" = "stats"),
-                                         selected = "plots"
+                                         selected = "stats"
                             ),
                             br(),   
                             # define one UI object to select stat_name
@@ -438,6 +438,7 @@ ui <- fluidPage(
                          br(), 
                          style = "overflow-y: auto; position: absolute; left: 25%",
                          # plotly
+                         downloadButton("mod3_download_plotly", "download plotly"),
                          plotlyOutput('mod3_plot', height = 730)
                )
              )
@@ -475,12 +476,12 @@ ui <- fluidPage(
                          downloadButton("mod4_download_plotly_bar", "download bar plot"),
                          plotlyOutput('mod4_stats_bar', height = 730),
                          br(), 
-                         # equalizer plotly
-                         downloadButton("mod4_download_plotly_bar", "download equalizer plot"),
+                         # volcano plotly
+                         downloadButton("mod4_download_plotly_volcano", "download volcano plot"),
                          plotlyOutput('mod4_volcano', height = 730),
                          br(), 
                          # box/scatter plotly
-                         downloadButton("mod4_download_plotly_bar", "download scatter plot"),
+                         downloadButton("mod4_download_plotly_scatter", "download scatter plot"),
                          plotlyOutput('mod4_box_scatter', height = 730)
                )
              )
@@ -493,7 +494,8 @@ ui <- fluidPage(
 
 
 # Define server logic required to draw outputs
-server <- function(input, output) {
+server <- function(input, output, session) {
+  session_store <- reactiveValues()
   ## create indicator of box plot output
   box_switch <- reactive({
     if (input$mod1_select_object=="box"){
@@ -728,7 +730,7 @@ server <- function(input, output) {
   
   # render pca/umap of mod3
   output$mod3_plot <- renderPlotly({
-    if (mod3_input_object()[1]=="pca"){
+    session_store$mod3_plotly <- if (mod3_input_object()[1]=="pca"){
       mod3_plots_pca(D = D,
                      scale_data = mod3_input_object()[3],
                      color = mod3_input_object()[2],
@@ -743,7 +745,17 @@ server <- function(input, output) {
                       n_neighbors = as.numeric(mod3_input_object()[6])
       )
     } 
+    session_store$mod3_plotly
   })
+  # 
+  output$mod3_download_plotly <- downloadHandler(
+    filename = function() {
+      paste("data-", Sys.Date(), ".html", sep = "")
+    },
+    content = function(file) {
+      saveWidget(as_widget(session_store$mod3_plotly), file, selfcontained = TRUE)
+    }
+  )
   
   
   # create reactive inputs list
@@ -802,8 +814,9 @@ server <- function(input, output) {
         plot <- plot_stats[[i]]$output[[1]]
       }
     }
-    ggplotly(plot, source = "sub_bar") %>% 
+    session_store$mod4_stats_bar <- ggplotly(plot, source = "sub_bar") %>% 
       layout(dragmode = "lasso")
+    session_store$mod4_stats_bar
   })
   # 
   output$mod4_download_plotly_bar <- downloadHandler(
@@ -812,7 +825,7 @@ server <- function(input, output) {
     },
     content = function(file) {
       # export plotly html widget as a temp file to download.
-      saveWidget(as_widget(output$mod4_stats_bar), file, selfcontained = TRUE)
+      saveWidget(as_widget(session_store$mod4_stats_bar), file, selfcontained = TRUE)
     }
   )
   # render volcano plot in Mod4
@@ -853,12 +866,13 @@ server <- function(input, output) {
         ggtitle(paste0(stat_name_selected(), "-", name)) +
         ggrepel::geom_text_repel(aes(label = name), max.overlaps = Inf)
       
-      ggplotly(plot, source = "sub_vol") %>%
+      session_store$mod4_volcano <- ggplotly(plot, source = "sub_vol") %>%
         layout(dragmode = "lasso",
                legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3)) %>%
         add_text(text=~data_vol$text,
                  textposition="top right",
                  showlegend = T)
+      session_store$mod4_volcano
     }
   })
   
@@ -868,7 +882,7 @@ server <- function(input, output) {
       paste("data-", Sys.Date(), ".html", sep = "")
     },
     content = function(file) {
-      saveWidget(as_widget(output$mod4_volcano), file, selfcontained = TRUE)
+      saveWidget(as_widget(session_store$mod4_volcano), file, selfcontained = TRUE)
     }
   )
   
@@ -928,7 +942,7 @@ server <- function(input, output) {
         geom_smooth(method = "lm", se = FALSE) +
         ggtitle(paste0(input$mod2.stat, "-", name, "-", name2))
       
-      ggplotly(plot) %>%
+      session_store$mod4_box_scatter <- ggplotly(plot) %>%
         layout(dragmode = "lasso") %>%
         add_annotations(
           x = min(data_box$Age) + 5,
@@ -942,7 +956,9 @@ server <- function(input, output) {
           text = paste0("P.adj: ", p.adj),
           showarrow = F
         )
+      output$mod4_box_scatter
     }
+    
   })
   
   # 
@@ -951,7 +967,7 @@ server <- function(input, output) {
       paste("data-", Sys.Date(), ".html", sep = "")
     },
     content = function(file) {
-      saveWidget(as_widget(output$mod4_box_scatter), file, selfcontained = TRUE)
+      saveWidget(as_widget(session_store$mod4_box_scatter), file, selfcontained = TRUE)
     }
   )
   
@@ -971,7 +987,7 @@ server <- function(input, output) {
         plot <- plots[[i]]$output[[1]]
       }
     }
-    ggplotly(plot, source = "sub_bar") %>%
+    session_store$mod2.bar <- ggplotly(plot, source = "sub_bar") %>%
       layout(dragmode = "lasso",
              legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3))
   })
@@ -983,7 +999,7 @@ server <- function(input, output) {
     },
     content = function(file) {
       # export plotly html widget as a temp file to download.
-      saveWidget(as_widget(output$mod2.bar), file, selfcontained = TRUE)
+      saveWidget(as_widget(session_store$mod2.bar), file, selfcontained = TRUE)
     }
   )
   
@@ -1025,7 +1041,7 @@ server <- function(input, output) {
         ggtitle(paste0(inputs[1], "-", name)) +
         ggrepel::geom_text_repel(aes(label = name), max.overlaps = Inf)
       
-      ggplotly(plot, source = "sub_vol") %>%
+      session_store$mod2.vol <- ggplotly(plot, source = "sub_vol") %>%
         layout(dragmode = "lasso",
                legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3)) %>%
         add_text(text=~data_vol$text,
@@ -1040,7 +1056,7 @@ server <- function(input, output) {
       paste("data-", Sys.Date(), ".html", sep = "")
     },
     content = function(file) {
-      saveWidget(as_widget(output$mod2.vol), file, selfcontained = TRUE)
+      saveWidget(as_widget(session_store$mod2.vol), file, selfcontained = TRUE)
     }
   )
   
@@ -1101,7 +1117,7 @@ server <- function(input, output) {
         geom_smooth(method = "lm", se = FALSE) +
         ggtitle(paste0(input$mod2.stat, "-", name, "-", name2))
       
-      ggplotly(plot) %>%
+      session_store$mod2.box <- ggplotly(plot) %>%
         layout(dragmode = "lasso") %>%
         add_annotations(
           x = min(data_box$Age) + 5,
@@ -1124,7 +1140,7 @@ server <- function(input, output) {
       paste("data-", Sys.Date(), ".html", sep = "")
     },
     content = function(file) {
-      saveWidget(as_widget(output$mod2.box), file, selfcontained = TRUE)
+      saveWidget(as_widget(session_store$mod2.box), file, selfcontained = TRUE)
     }
   )
   

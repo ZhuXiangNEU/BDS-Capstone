@@ -1,3 +1,53 @@
+################################################################################
+################################## Some Notes ##################################
+################################################################################
+
+# The codes are structured following some general notes of Shiny App, 
+# you can just ignore this part if you are already familiar with Shiny. 
+
+# Three steps to create a Shiny
+# Step one: create layout of user interface (UI)
+  # ui <- ...
+# Step two: create rendering logic underlying the UI
+  # server <- function(input, output) {}
+# Step three: run the App
+  # shinyApp(ui = ui, server = server)
+
+# In ui, you generally define a sidebar panel for all the control widgets 
+# and a main panel for the outputs.
+
+# In the sidebar panel, commonly used widgets include
+#   radioButtons() for single choice by clicking,
+#   selectInput() for single choice by drop down box,
+#   numericInput() for manually type in a number,
+#   checkboxInput() for binary check box,
+#   actionButton() for delayed outputs.
+# You give each control widget an object_name which you refer to by input$object_name.
+
+# In the main panel, you define output objects by 
+#   plotOutput() for plot object,
+#   plotlyOutput() for plotly object,
+#   dataTableOutput() for table object,
+#   downloadButton() for downloading output.
+# You give each output object an object_name which you refer to by output$object_name.
+
+# In server, you define rendering logic of UI objects by 
+#   renderPlot() for plot objects,
+#   renderPlotly() for plotly objects,
+#   renderDataTable() for table objects.
+
+# The input$object_name syntax can only be used inside of render(). 
+# But you can refer to widget value outside of render() by creating reactive_object using reactive().
+
+# In situations when some control widgets have dynamic values or 
+# some outputs have dynamic structure, you define it as uiOutput().
+
+
+
+################################################################################
+######################### load packages and result SE object ###################
+################################################################################
+
 # load packages
 library(shiny)
 library(shinyWidgets)
@@ -10,7 +60,13 @@ library(plotly)
 # load SE
 load("SE.Rdata")
 
-# Extract all the object names for accessor functions
+
+################################################################################
+############ Create a data frame of object names and stat_name #################
+##################### of all the result objects in SE ##########################
+################################################################################
+
+# Extract the object names
 obj_list <- data.frame()
 for (i in seq_along(metadata(D)$results)) {
   for (j in seq_along(metadata(D)$results[[i]]$fun)) {
@@ -18,7 +74,7 @@ for (i in seq_along(metadata(D)$results)) {
   }
 }
 
-# Extract all the stat_name
+# Extract the stat_name
 stat_name <- data.frame(stat_name=NA)
 for (i in seq_along(metadata(D)$results)) {
   stat_name[i, 1] <- if ('stat_name' %in% names(metadata(D)$results[[i]]$args)) {
@@ -30,22 +86,35 @@ for (i in seq_along(metadata(D)$results)) {
   }
 }
 
-# merge object names and stat_name
+# Merge object names and stat_name
 order_id <- 1:nrow(obj_list)
 obj_name <- cbind(order_id, obj_list, stat_name) 
 obj_name$stat_name <- ifelse(is.na(obj_name$stat_name), 
+                             # name it as "(no stat_name)" for non-comparison analysis
                              "(no stat_name)", 
                              obj_name$stat_name)
 
+
+################################################################################
+######### Move some steps in advance to make server function codes #############
+############## as few as possible to shorten waiting time ######################
+######### as server function runs every time when control widget is updated ####
+################################################################################
+
+
+# assign an object of all stats tables
 table_stats <- mtm_res_get_entries(D, c("stats", "univ"))
+# assign an object of all stats plots
 plot_stats <- mtm_res_get_entries(D, c("plots", "stats"))
+# assign an object of all box plots
 plot_box <- mtm_res_get_entries(D, c("plots", "box"))
-box_obj_name <- subset(obj_name, V1=="plots")
-box_obj_name <- subset(box_obj_name, V2=="box")
+# assign a data frame of all the object names of box plots
+  # filter() cannot run in Shiny, use subset() instead
+box_obj_name <- subset(obj_name, V1=="plots"&V2=="box")
 box_output_order <- box_obj_name %>%
   mutate(order=seq(from=1, to=n()))
 
-## SCALE -log10
+# create reverselog_trans for log10-SCALE in volcano plot
 reverselog_trans <- function (base = exp(1)){
   trans <- function(x) -log(x, base)
   inv <- function(x) base^(-x)
@@ -197,7 +266,8 @@ mod3_plots_umap <- function (D, title = "UMAP",
   
 }
 
-## equilizer plot
+# define equilizer plot object
+
 # define pathway annotation column (extracted from corresponding stat_bar plot)
 pwvar <- "pathway"
 # define threshold for significance (extracted from corresponding stat_bar plot)
@@ -266,8 +336,15 @@ eqplot <- lapply(comp %>% {names(.)=.;.}, function(comparison){
   })
 })
 
-# Define UI for application
+
+################################################################################
+########################## Define UI for Shiny application #####################
+################################################################################
+
 ui <- fluidPage(
+  
+  # set appearance customization -------------------------------------------------
+
   theme = "bootstrap.css",
   includeCSS("www/style.css"),
   setBackgroundColor("#FFFFFF"),# set canvas background color
@@ -294,7 +371,9 @@ ui <- fluidPage(
                 windowTitle = "Maplet"),
     # sticky tabs while scrolling main panel
     position = c("fixed-top"), 
-    # Six Head tabs to accommodate for navigation and comparison between modules
+    
+  # Define layout of Module 1 ----------------------------------------------------
+
     tabPanel("Module 1", 
              sidebarLayout(
                sidebarPanel(id = "mod1_panel1",
@@ -341,6 +420,9 @@ ui <- fluidPage(
                )
              )
     ), 
+
+  # Define layout of Module 2 ----------------------------------------------------
+
     tabPanel("Module 2",
              sidebarLayout(
                sidebarPanel(
@@ -402,6 +484,9 @@ ui <- fluidPage(
                )
              ) 
     ),
+
+  # Define layout of Module 3 ----------------------------------------------------
+
     tabPanel("Module 3", 
              sidebarLayout(
                sidebarPanel(id = "mod3_panel1",
@@ -443,6 +528,9 @@ ui <- fluidPage(
                )
              )
     ),
+
+  # Define layout of Module 4 ----------------------------------------------------
+
     tabPanel("Module 4", 
              sidebarLayout(
                sidebarPanel(id = "mod4_panel1",
@@ -492,26 +580,13 @@ ui <- fluidPage(
 )
 
 
+################################################################################
+################ Define server logic required to draw outputs ##################
+################################################################################
 
-# Define server logic required to draw outputs
 server <- function(input, output) {
-  session_store <- reactiveValues()
-  ## create indicator of box plot output
-  box_switch <- reactive({
-    if (input$mod1_select_object=="box"){
-      "box_plot"
-    } else {
-      "non_box_plot"
-    }
-  })  
-  ## create intermediate var to indicate coloring widgets
-  inter_var <- reactive({
-    if (input$mod3_select_plot=="pca" & input$mod3_pca_data_type=="scores") {
-      "coloring"
-    } else {
-      "no_coloring"
-    }
-  })
+
+# Define rendering logic of control widgets in Module 1 ------------------------
   
   # create stat_name list dependent on radio button
   output$mod1_select_statname_ui <- renderUI({
@@ -520,6 +595,24 @@ server <- function(input, output) {
                 choices = distinct(obj_name[obj_name$V1==input$mod1_radio, ], stat_name)$stat_name
     )
   })
+  
+  # create object list dependent on radio button and stat_name
+  output$mod1_select_object_ui <- renderUI({
+    selectInput("mod1_select_object", "Select one object:",
+                width = "220px",
+                choices = distinct(obj_name[obj_name$stat_name==input$mod1_select_statname&obj_name$V1==input$mod1_radio, ], V2)$V2
+    )
+  })
+  
+  # create indicator of box plot output
+  box_switch <- reactive({
+    if (input$mod1_select_object=="box"){
+      "box_plot"
+    } else {
+      "non_box_plot"
+    }
+  })
+  
   ## get the order of selected stat_name
   ord <- reactive({
     if(input$mod1_select_statname %in% box_output_order$stat_name){
@@ -527,13 +620,6 @@ server <- function(input, output) {
     } else {
       1
     }
-  })
-  # create object list dependent on radio button and stat_name
-  output$mod1_select_object_ui <- renderUI({
-    selectInput("mod1_select_object", "Select one object:",
-                width = "220px",
-                choices = distinct(obj_name[obj_name$stat_name==input$mod1_select_statname&obj_name$V1==input$mod1_radio, ], V2)$V2
-    )
   })
   
   ## create dynamic choices of number of box plots to render 
@@ -550,73 +636,15 @@ server <- function(input, output) {
   })
   
   # create reactive inputs list
-  mod1_input_object <- eventReactive(input$mod1_go, 
+  mod1_input_object <- eventReactive(input$mod1_go, ## delayed output
                                      {c(input$mod1_radio,
                                         input$mod1_select_statname,
                                         input$mod1_select_object,
                                         input$mod1_box_plot_num)}
   )
   
-  # create reactive plotting argument for PCA/UMAP
-  output$mod3_plot_argument <- renderUI({
-    switch(
-      input$mod3_select_plot,
-      "pca"=list(selectInput("mod3_pca_data_type", "Select data type for PCA:",
-                             width = "220px",
-                             choices = c("scores", "loadings"),
-                             selected = "scores"
-      ),
-      checkboxInput("mod3_scale_data", "Scaled data", 
-                    value = TRUE
-      )
-      ),
-      "umap"=list(numericInput("mod3_umap_n_neighbors", 
-                               "Number of neighbors for UMAP:", 
-                               value = 15,
-                               width = "220px"
-      ),
-      checkboxInput("mod3_scale_data", "Scaled data", 
-                    value = TRUE
-      ),
-      selectInput("mod3_select_colData", 
-                  "Select one colData column:", 
-                  choices = names(colData(D)),
-                  selected = "BOX.NUMBER",
-                  width = "220px"
-      ),
-      checkboxInput("mod3_checkbox_factor", 
-                    "Categorical Coloring", 
-                    value = FALSE
-      )
-      )
-    )
-  })
-  output$mod3_color_ui <- renderUI({
-    switch(
-      inter_var(),
-      "coloring"=list(selectInput("mod3_select_colData", 
-                                  "Select one colData column:", 
-                                  choices = names(colData(D)),
-                                  selected = "BOX.NUMBER",
-                                  width = "220px"
-      ),
-      checkboxInput("mod3_checkbox_factor", 
-                    "Categorical Coloring", 
-                    value = FALSE
-      )
-      ),
-      "no_coloring"= NULL
-    )
-  })
-  # create reactive inputs list
-  mod3_input_object <- eventReactive(input$mod3_go, 
-                                     {c(input$mod3_select_plot, 
-                                        input$mod3_select_colData,
-                                        input$mod3_scale_data,
-                                        input$mod3_checkbox_factor,
-                                        input$mod3_pca_data_type,
-                                        input$mod3_umap_n_neighbors)}
-  )
+# Define rendering logic of outputs in Module 1 --------------------------------
+  
   # Insert the right number of plot output objects into UI
   output$mod1_output_plot <- renderUI({
     ## limit plots to specified stat_name
@@ -727,245 +755,9 @@ server <- function(input, output) {
       "stats" = dataTableOutput("mod1_output_table")
     )
   })
-  
-  # render pca/umap of mod3
-  output$mod3_plot <- renderPlotly({
-    session_store$mod3_plotly <- if (mod3_input_object()[1]=="pca"){
-      mod3_plots_pca(D = D,
-                     scale_data = mod3_input_object()[3],
-                     color = mod3_input_object()[2],
-                     categorizing=mod3_input_object()[4],
-                     data_type = mod3_input_object()[5]
-      )
-    } else {
-      mod3_plots_umap(D = D,
-                      scale_data = mod3_input_object()[3],  
-                      color = mod3_input_object()[2],
-                      categorizing=mod3_input_object()[4],
-                      n_neighbors = as.numeric(mod3_input_object()[6])
-      )
-    } 
-    session_store$mod3_plotly
-  })
-  # 
-  output$mod3_download_plotly <- downloadHandler(
-    filename = function() {
-      paste("data-", Sys.Date(), ".html", sep = "")
-    },
-    content = function(file) {
-      saveWidget(as_widget(session_store$mod3_plotly), file, selfcontained = TRUE)
-    }
-  )
-  
-  
-  # create reactive inputs list
-  mod4_metabolite_table <- 
-    eventReactive(input$mod4_go,
-                  {
-                    table <- data.frame()
-                    for (i in 2:length(table_stats)){
-                      tab <- table_stats[[i]]$output$table %>%
-                        mutate(`stat name`=plot_stats[[i-1]]$args$stat_list)
-                      table <- rbind(table, tab)
-                    }
-                    table <- table %>%
-                      select(var, statistic, p.value, p.adj, `stat name`, estimate, std.error) %>%
-                      mutate(statistic=formatC(statistic, format = "E", digits = 2),
-                             p.value=formatC(p.value, format = "E", digits = 2),
-                             p.adj=formatC(p.adj, format = "E", digits = 2),
-                             estimate=formatC(estimate, format = "E", digits = 2),
-                             std.error=formatC(std.error, format = "E", digits = 2)
-                      ) %>%
-                      filter(var==input$mod4_metabolite)
-                  }
-    )
-  
-  # render stats table of Mod4
-  output$mod4_table <- renderDataTable({
-    datatable(mod4_metabolite_table(),
-              selection = "single",
-              options = list(
-                dom = 't',
-                # limit number of rows
-                pageLength =  10,
-                lengthMenu = c(10, 20, 50)
-              )
-    )
-  })
-  
-  # catch the selected row
-  session_store$s <- NA
-  observe({
-    if(!is.null(input$mod4_table_rows_selected)){
-      session_store$s <- input$mod4_table_rows_selected
-    }
-  })
-  ## extract the stat_name
-  stat_name_selected <- reactive({
-    mod4_metabolite_table() %>% 
-      slice(round(as.numeric(session_store$s))) %>%
-      select(`stat name`)
-  })
-  # render statsBar plot in Mod4
-  output$mod4_stats_bar <- renderPlotly({
-    for (i in 1:(length(plot_stats)-1)) {
-      if (plot_stats[[i]]$args$stat_list == stat_name_selected()) {
-        plot <- plot_stats[[i]]$output[[1]]
-      }
-    }
-    session_store$mod4_stats_bar <- ggplotly(plot, source = "sub_bar") %>% 
-      layout(dragmode = "lasso")
-    session_store$mod4_stats_bar
-  })
-  # 
-  output$mod4_download_plotly_bar <- downloadHandler(
-    filename = function() {
-      paste("data-", Sys.Date(), ".html", sep = "")
-    },
-    content = function(file) {
-      # export plotly html widget as a temp file to download.
-      saveWidget(as_widget(session_store$mod4_stats_bar), file, selfcontained = TRUE)
-    }
-  )
-  # render volcano plot in Mod4
-  output$mod4_volcano <- renderPlotly({
-    d <- event_data("plotly_click", source = "sub_bar")
-    if (!is.null(d)) {
-      plots_bar <- mtm_res_get_entries(D, c("plots", "stats"))
-      for (i in 1:(length(plots_bar)-1)) {
-        if (plots_bar[[i]]$args$stat_list == stat_name_selected()) {
-          data_bar <- plots_bar[[i]]$output[[1]]$data
-        }
-      }
-      lvls <- rev(levels(data_bar$label))
-      label <- lvls[round(as.numeric(d$y))]
-      name <- data_bar[data_bar$label == label, ]$name
-      
-      plots_vol <- mtm_res_get_entries(D, c("plots", "volcano"))
-      for (i in seq_along(plots_vol)) {
-        if (plots_vol[[i]]$args$stat_name == stat_name_selected()) {
-          data_vol <- plots_vol[[i]]$output[[1]]$data
-        }
-      }
-      
-      row_data <- rowData(D) %>% data.frame()
-      names <- unlist(row_data[row_data$SUB_PATHWAY == name,]$name)
-      data_vol$isSelected <- data_vol$name %in% names
-      data_vol$text <- ifelse(data_vol$name %in% names, data_vol$name, "")
-      
-      t <- list(family = "sans serif", size = 14, color = toRGB("grey50"))
-      
-      plot <- data_vol %>%
-        ggplot(aes(x = statistic, y = p.value, color = isSelected)) +
-        geom_point(aes(text = name)) +
-        scale_y_continuous(trans = reverselog_trans(10),
-                           breaks = scales::trans_breaks("log10", function(x) 10^x),
-                           labels = scales::trans_format("log10", scales::math_format(10^.x))) +
-        labs(y = "p-value") +
-        ggtitle(paste0(stat_name_selected(), "-", name)) +
-        ggrepel::geom_text_repel(aes(label = name), max.overlaps = Inf)
-      session_store$mod4_vol <- ggplotly(plot, source = "sub_vol") %>%
-        layout(dragmode = "lasso",
-               legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3)) %>%
-        add_text(text=~data_vol$text,
-                 textposition="top right",
-                 showlegend = T)
-      session_store$mod4_vol
-    }
-  })
-  
-  # 
-  output$mod4_download_plotly_volcano <- downloadHandler(
-    filename = function() {
-      paste("data-", Sys.Date(), ".html", sep = "")
-    },
-    content = function(file) {
-      saveWidget(as_widget(session_store$mod4_vol), file, selfcontained = TRUE)
-    }
-  )
-  
-  #
-  output$mod4_box_scatter <- renderPlotly({
-    d1 <- event_data("plotly_click", source = "sub_bar")
-    d2 <- event_data("plotly_click", source = "sub_vol")
-    if (!is.null(d1) & !is.null(d2)) {
-      plots_bar <- mtm_res_get_entries(D, c("plots", "stats"))
-      for (i in 1:(length(plots_bar)-1)) {
-        if (plots_bar[[i]]$args$stat_list == stat_name_selected()) {
-          data_bar <- plots_bar[[i]]$output[[1]]$data
-        }
-      }
-      lvls <- rev(levels(data_bar$label))
-      label <- lvls[round(as.numeric(d1$y))]
-      name <- data_bar[data_bar$label == label, ]$name
-      
-      plots_vol <- mtm_res_get_entries(D, c("plots", "volcano"))
-      for (i in seq_along(plots_vol)) {
-        if (plots_vol[[i]]$args$stat_name == stat_name_selected()) {
-          data_vol <- plots_vol[[i]]$output[[1]]$data
-        }
-      }
-      
-      row_data <- rowData(D) %>% data.frame()
-      names <- unlist(row_data[row_data$SUB_PATHWAY == name,]$name)
-      data_vol <- data_vol[data_vol$name %in% names, ]
-      name2 <- data_vol[as.numeric(d2$pointNumber) + 1, ]$name[1]
-      
-      rd <- rowData(D) %>%
-        as.data.frame() %>%
-        dplyr::mutate(var = rownames(D))
-      
-      stat <- maplet::mtm_get_stat_by_name(D, stat_name_selected()) %>%
-        dplyr::inner_join(rd, by = "var")
-      
-      data_box <- D %>%
-        maplet:::mti_format_se_samplewise() %>%
-        tidyr::gather(var, value, dplyr::one_of(rownames(D)))%>%
-        dplyr::rename("Age Regression" = "Age",
-                      "Comparison Outcome1" = "outcome1",
-                      "Comparison Outcome2" = "outcome2",
-                      "Diagnosis Analysis" = "Diagnosis") %>%
-        dplyr::select(dplyr::one_of(c("var","value", stat_name_selected()))) %>%
-        dplyr::inner_join(stat[,dplyr::intersect(colnames(stat),
-                                                 c('var','statistic','p.value','p.adj','name'))], by = "var") %>%
-        dplyr::select(-var)
-      
-      data_box <- data_box[data_box$name==name2, ]
-      p.value <- signif(mean(data_box$p.value), 3)
-      p.adj <- signif(mean(data_box$p.adj), 3)
-      plot <- data_box %>%
-        ggplot(aes(x = !!sym(stat_name_selected()),
-                   y = value)) +
-        geom_point(aes(text = paste0("Name:", name))) +
-        geom_smooth(method = "lm", se = FALSE) +
-        ggtitle(paste0(stat_name_selected(), "-", name, "-", name2))
-      session_store$mod4_box <- ggplotly(plot) %>%
-        layout(dragmode = "lasso") %>%
-        add_annotations(
-          x = min(data_box$Age) + 5,
-          y = max(data_box$value),
-          text = paste0("P-value: ", p.value),
-          showarrow = F
-        ) %>%
-        add_annotations(
-          x = min(data_box$Age) + 5,
-          y = max(data_box$value) - 1,
-          text = paste0("P.adj: ", p.adj),
-          showarrow = F
-        )
-      session_store$mod4_box
-    }
-  })
-  
-  # 
-  output$mod4_download_plotly_scatter <- downloadHandler(
-    filename = function() {
-      paste("data-", Sys.Date(), ".html", sep = "")
-    },
-    content = function(file) {
-      saveWidget(as_widget(session_store$mod4_box), file, selfcontained = TRUE)
-    }
-  )
+
+# Define rendering logic of outputs in Module 2 --------------------------------
+  session_store <- reactiveValues()
   
   # create reactive inputs list
   mod2_input_object <- eventReactive(input$mod2_go, 
@@ -974,7 +766,7 @@ server <- function(input, output) {
                                         input$mod2.plot3)}
   )
   
-  #
+  # barplot
   output$mod2.bar <- renderPlotly({
     inputs <- mod2_input_object()
     plots <- mtm_res_get_entries(D, c("plots", "stats"))
@@ -983,13 +775,13 @@ server <- function(input, output) {
         plot <- plots[[i]]$output[[1]]
       }
     }
-    session_store$mod2.bar <- ggplotly(plot, source = "sub_bar") %>%
+    session_store$mod2.bar <- ggplotly(plot, source = "mod2_sub_bar") %>%
       layout(dragmode = "lasso",
              legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3))
     session_store$mod2.bar
   })
   
-  # 
+  # download button 
   output$mod2_download_plotly_bar <- downloadHandler(
     filename = function() {
       paste("data-", Sys.Date(), ".html", sep = "")
@@ -1000,9 +792,11 @@ server <- function(input, output) {
     }
   )
   
+  # volcano plot
+  
   output$mod2.vol <- renderPlotly({
     inputs <- mod2_input_object()
-    d <- event_data("plotly_click", source = "sub_bar")
+    d <- event_data("plotly_click", source = "mod2_sub_bar")
     if (!is.null(d)) {
       plots_bar <- mtm_res_get_entries(D, c("plots", "stats"))
       for (i in seq_along(plots_bar)) {
@@ -1038,7 +832,7 @@ server <- function(input, output) {
         ggtitle(paste0(inputs[1], "-", name)) +
         ggrepel::geom_text_repel(aes(label = name), max.overlaps = Inf)
       
-      session_store$mod2.vol <- ggplotly(plot, source = "sub_vol") %>%
+      session_store$mod2.vol <- ggplotly(plot, source = "mod2_sub_vol") %>%
         layout(dragmode = "lasso",
                legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3)) %>%
         add_text(text=~data_vol$text,
@@ -1048,7 +842,7 @@ server <- function(input, output) {
     }
   })
   
-  # 
+  # download button
   output$mod2_download_plotly_volcano <- downloadHandler(
     filename = function() {
       paste("data-", Sys.Date(), ".html", sep = "")
@@ -1058,11 +852,11 @@ server <- function(input, output) {
     }
   )
   
-  #
+  # box-scatter plot
   output$mod2.box <- renderPlotly({
     inputs <- mod2_input_object()
-    d1 <- event_data("plotly_click", source = "sub_bar")
-    d2 <- event_data("plotly_click", source = "sub_vol")
+    d1 <- event_data("plotly_click", source = "mod2_sub_bar")
+    d2 <- event_data("plotly_click", source = "mod2_sub_vol")
     if (!is.null(d1) & !is.null(d2)) {
       plots_bar <- mtm_res_get_entries(D, c("plots", "stats"))
       for (i in seq_along(plots_bar)) {
@@ -1133,7 +927,7 @@ server <- function(input, output) {
     }
   })
   
-  # 
+  # download button
   output$mod2_download_plotly_scatter <- downloadHandler(
     filename = function() {
       paste("data-", Sys.Date(), ".html", sep = "")
@@ -1142,7 +936,326 @@ server <- function(input, output) {
       saveWidget(as_widget(session_store$mod2.box), file, selfcontained = TRUE)
     }
   )
+
+# Define rendering logic of control widgets in Module 3 ------------------------
   
+  # create reactive plotting argument for PCA/UMAP
+  output$mod3_plot_argument <- renderUI({
+    switch(
+      input$mod3_select_plot,
+      "pca"=list(selectInput("mod3_pca_data_type", "Select data type for PCA:",
+                             width = "220px",
+                             choices = c("scores", "loadings"),
+                             selected = "scores"
+      ),
+      checkboxInput("mod3_scale_data", "Scaled data", 
+                    value = TRUE
+      )
+      ),
+      "umap"=list(numericInput("mod3_umap_n_neighbors", 
+                               "Number of neighbors for UMAP:", 
+                               value = 15,
+                               width = "220px"
+      ),
+      checkboxInput("mod3_scale_data", "Scaled data", 
+                    value = TRUE
+      ),
+      selectInput("mod3_select_colData", 
+                  "Select one colData column:", 
+                  choices = names(colData(D)),
+                  selected = "BOX.NUMBER",
+                  width = "220px"
+      ),
+      checkboxInput("mod3_checkbox_factor", 
+                    "Categorical Coloring", 
+                    value = FALSE
+      )
+      )
+    )
+  })
+  
+# create intermediate var to indicate coloring widgets
+inter_var <- reactive({
+  if (input$mod3_select_plot=="pca" & input$mod3_pca_data_type=="scores") {
+    "coloring"
+  } else {
+    "no_coloring"
+  }
+})
+
+  output$mod3_color_ui <- renderUI({
+    switch(
+      inter_var(),
+      "coloring"=list(selectInput("mod3_select_colData", 
+                                  "Select one colData column:", 
+                                  choices = names(colData(D)),
+                                  selected = "BOX.NUMBER",
+                                  width = "220px"
+      ),
+      checkboxInput("mod3_checkbox_factor", 
+                    "Categorical Coloring", 
+                    value = FALSE
+      )
+      ),
+      "no_coloring"= NULL
+    )
+  })
+  
+  # create reactive inputs list
+  mod3_input_object <- eventReactive(input$mod3_go, 
+                                     {c(input$mod3_select_plot, 
+                                        input$mod3_select_colData,
+                                        input$mod3_scale_data,
+                                        input$mod3_checkbox_factor,
+                                        input$mod3_pca_data_type,
+                                        input$mod3_umap_n_neighbors)}
+  )
+
+# Define rendering logic of outputs in Module 3 --------------------------------
+  
+  # render pca/umap of mod3
+  output$mod3_plot <- renderPlotly({
+    session_store$mod3_plotly <- if (mod3_input_object()[1]=="pca"){
+      mod3_plots_pca(D = D,
+                     scale_data = mod3_input_object()[3],
+                     color = mod3_input_object()[2],
+                     categorizing=mod3_input_object()[4],
+                     data_type = mod3_input_object()[5]
+      )
+    } else {
+      mod3_plots_umap(D = D,
+                      scale_data = mod3_input_object()[3],  
+                      color = mod3_input_object()[2],
+                      categorizing=mod3_input_object()[4],
+                      n_neighbors = as.numeric(mod3_input_object()[6])
+      )
+    } 
+    session_store$mod3_plotly
+  })
+  
+  # download button
+  output$mod3_download_plotly <- downloadHandler(
+    filename = function() {
+      paste("data-", Sys.Date(), ".html", sep = "")
+    },
+    content = function(file) {
+      saveWidget(as_widget(session_store$mod3_plotly), file, selfcontained = TRUE)
+    }
+  )
+  
+# Define rendering logic of outputs in Module 4 --------------------------------
+  
+  # create reactive stats table
+  mod4_metabolite_table <- 
+    eventReactive(input$mod4_go,
+                  {
+                    table <- data.frame()
+                    for (i in 2:length(table_stats)){
+                      tab <- table_stats[[i]]$output$table %>%
+                        mutate(`stat name`=plot_stats[[i-1]]$args$stat_list)
+                      table <- rbind(table, tab)
+                    }
+                    table <- table %>%
+                      select(var, statistic, p.value, p.adj, `stat name`, estimate, std.error) %>%
+                      mutate(statistic=formatC(statistic, format = "E", digits = 2),
+                             p.value=formatC(p.value, format = "E", digits = 2),
+                             p.adj=formatC(p.adj, format = "E", digits = 2),
+                             estimate=formatC(estimate, format = "E", digits = 2),
+                             std.error=formatC(std.error, format = "E", digits = 2)
+                      ) %>%
+                      filter(var==input$mod4_metabolite)
+                  }
+    )
+  
+  # render stats table of Mod4
+  output$mod4_table <- renderDataTable({
+    datatable(mod4_metabolite_table(),
+              selection = "single",
+              options = list(
+                dom = 't',
+                # limit number of rows
+                pageLength =  10,
+                lengthMenu = c(10, 20, 50)
+              )
+    )
+  })
+  
+  # catch the selected row
+  session_store$s <- NA
+  observe({
+    if(!is.null(input$mod4_table_rows_selected)){
+      session_store$s <- input$mod4_table_rows_selected
+    }
+  })
+  
+  ## extract the stat_name
+  stat_name_selected <- reactive({
+    mod4_metabolite_table() %>% 
+      slice(round(as.numeric(session_store$s))) %>%
+      select(`stat name`)
+  })
+  
+  # render statsBar plot in Mod4
+  output$mod4_stats_bar <- renderPlotly({
+    for (i in 1:(length(plot_stats)-1)) {
+      if (plot_stats[[i]]$args$stat_list == stat_name_selected()) {
+        plot <- plot_stats[[i]]$output[[1]]
+      }
+    }
+    session_store$mod4_stats_bar <- ggplotly(plot, source = "mod4_sub_bar") %>% 
+      layout(dragmode = "lasso")
+    session_store$mod4_stats_bar
+  })
+  # download button
+  output$mod4_download_plotly_bar <- downloadHandler(
+    filename = function() {
+      paste("data-", Sys.Date(), ".html", sep = "")
+    },
+    content = function(file) {
+      # export plotly html widget as a temp file to download.
+      saveWidget(as_widget(session_store$mod4_stats_bar), file, selfcontained = TRUE)
+    }
+  )
+  
+  # render volcano plot in Mod4
+  output$mod4_volcano <- renderPlotly({
+    d <- event_data("plotly_click", source = "mod4_sub_bar")
+    if (!is.null(d)) {
+      plots_bar <- mtm_res_get_entries(D, c("plots", "stats"))
+      for (i in 1:(length(plots_bar)-1)) {
+        if (plots_bar[[i]]$args$stat_list == stat_name_selected()) {
+          data_bar <- plots_bar[[i]]$output[[1]]$data
+        }
+      }
+      lvls <- rev(levels(data_bar$label))
+      label <- lvls[round(as.numeric(d$y))]
+      name <- data_bar[data_bar$label == label, ]$name
+      
+      plots_vol <- mtm_res_get_entries(D, c("plots", "volcano"))
+      for (i in seq_along(plots_vol)) {
+        if (plots_vol[[i]]$args$stat_name == stat_name_selected()) {
+          data_vol <- plots_vol[[i]]$output[[1]]$data
+        }
+      }
+      
+      row_data <- rowData(D) %>% data.frame()
+      names <- unlist(row_data[row_data$SUB_PATHWAY == name,]$name)
+      data_vol$isSelected <- data_vol$name %in% names
+      data_vol$text <- ifelse(data_vol$name %in% names, data_vol$name, "")
+      
+      t <- list(family = "sans serif", size = 14, color = toRGB("grey50"))
+      
+      plot <- data_vol %>%
+        ggplot(aes(x = statistic, y = p.value, color = isSelected)) +
+        geom_point(aes(text = name)) +
+        scale_y_continuous(trans = reverselog_trans(10),
+                           breaks = scales::trans_breaks("log10", function(x) 10^x),
+                           labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+        labs(y = "p-value") +
+        ggtitle(paste0(stat_name_selected(), "-", name)) +
+        ggrepel::geom_text_repel(aes(label = name), max.overlaps = Inf)
+      session_store$mod4_vol <- ggplotly(plot, source = "mod4_sub_vol") %>%
+        layout(dragmode = "lasso",
+               legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3)) %>%
+        add_text(text=~data_vol$text,
+                 textposition="top right",
+                 showlegend = T)
+      session_store$mod4_vol
+    }
+  })
+  
+  # download button
+  output$mod4_download_plotly_volcano <- downloadHandler(
+    filename = function() {
+      paste("data-", Sys.Date(), ".html", sep = "")
+    },
+    content = function(file) {
+      saveWidget(as_widget(session_store$mod4_vol), file, selfcontained = TRUE)
+    }
+  )
+  
+  # box-scatter plot
+  output$mod4_box_scatter <- renderPlotly({
+    d1 <- event_data("plotly_click", source = "mod4_sub_bar")
+    d2 <- event_data("plotly_click", source = "mod4_sub_vol")
+    if (!is.null(d1) & !is.null(d2)) {
+      plots_bar <- mtm_res_get_entries(D, c("plots", "stats"))
+      for (i in 1:(length(plots_bar)-1)) {
+        if (plots_bar[[i]]$args$stat_list == stat_name_selected()) {
+          data_bar <- plots_bar[[i]]$output[[1]]$data
+        }
+      }
+      lvls <- rev(levels(data_bar$label))
+      label <- lvls[round(as.numeric(d1$y))]
+      name <- data_bar[data_bar$label == label, ]$name
+      
+      plots_vol <- mtm_res_get_entries(D, c("plots", "volcano"))
+      for (i in seq_along(plots_vol)) {
+        if (plots_vol[[i]]$args$stat_name == stat_name_selected()) {
+          data_vol <- plots_vol[[i]]$output[[1]]$data
+        }
+      }
+      
+      row_data <- rowData(D) %>% data.frame()
+      names <- unlist(row_data[row_data$SUB_PATHWAY == name,]$name)
+      data_vol <- data_vol[data_vol$name %in% names, ]
+      name2 <- data_vol[as.numeric(d2$pointNumber) + 1, ]$name[1]
+      
+      rd <- rowData(D) %>%
+        as.data.frame() %>%
+        dplyr::mutate(var = rownames(D))
+      
+      stat <- maplet::mtm_get_stat_by_name(D, stat_name_selected()) %>%
+        dplyr::inner_join(rd, by = "var")
+      
+      data_box <- D %>%
+        maplet:::mti_format_se_samplewise() %>%
+        tidyr::gather(var, value, dplyr::one_of(rownames(D)))%>%
+        dplyr::rename("Age Regression" = "Age",
+                      "Comparison Outcome1" = "outcome1",
+                      "Comparison Outcome2" = "outcome2",
+                      "Diagnosis Analysis" = "Diagnosis") %>%
+        dplyr::select(dplyr::one_of(c("var","value", stat_name_selected()))) %>%
+        dplyr::inner_join(stat[,dplyr::intersect(colnames(stat),
+                                                 c('var','statistic','p.value','p.adj','name'))], by = "var") %>%
+        dplyr::select(-var)
+      
+      data_box <- data_box[data_box$name==name2, ]
+      p.value <- signif(mean(data_box$p.value), 3)
+      p.adj <- signif(mean(data_box$p.adj), 3)
+      plot <- data_box %>%
+        ggplot(aes(x = sym(stat_name_selected()),
+                   y = value)) +
+        geom_point(aes(text = paste0("Name:", name))) +
+        geom_smooth(method = "lm", se = FALSE) +
+        ggtitle(paste0(stat_name_selected(), "-", name, "-", name2))
+      session_store$mod4_box <- ggplotly(plot) %>%
+        layout(dragmode = "lasso") %>%
+        add_annotations(
+          x = min(data_box$Age) + 5,
+          y = max(data_box$value),
+          text = paste0("P-value: ", p.value),
+          showarrow = F
+        ) %>%
+        add_annotations(
+          x = min(data_box$Age) + 5,
+          y = max(data_box$value) - 1,
+          text = paste0("P.adj: ", p.adj),
+          showarrow = F
+        )
+      session_store$mod4_box
+    }
+  })
+  
+  # download button
+  output$mod4_download_plotly_scatter <- downloadHandler(
+    filename = function() {
+      paste("data-", Sys.Date(), ".html", sep = "")
+    },
+    content = function(file) {
+      saveWidget(as_widget(session_store$mod4_box), file, selfcontained = TRUE)
+    }
+  )
 }
 
 # Run the application 

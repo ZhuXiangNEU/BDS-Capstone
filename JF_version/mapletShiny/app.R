@@ -132,6 +132,7 @@ mod3_plots_pca <- function(D, title = "PCA",
                            categorizing,
                            pc1 = 1, pc2 = 2, 
                            data_type,
+                           hover,
                            ...){
   X = t(assay(D))
   if (any(is.na(X))) 
@@ -153,7 +154,7 @@ mod3_plots_pca <- function(D, title = "PCA",
     df <- data.frame(x = pca$x[, pc1], 
                      y = pca$x[, pc2], 
                      colData(D)
-    )
+                     )
     colnames(df)[1:2] <- c(sprintf("PC%d", pc1), 
                            sprintf("PC%d", pc2)
     )
@@ -166,12 +167,17 @@ mod3_plots_pca <- function(D, title = "PCA",
     if(categorizing){
       df[, color] <- factor(df[, color])
     }
+    # customize hover text
+    # hover_text <- paste0(names(data.frame(colData(D)))[as.numeric(hover)], ": ", 
+    #                     data.frame(colData(D))[[as.numeric(hover)]])
     # draw ggplot
     p <- ggplot(data = df, 
                 aes_string(
                   x = sprintf("PC%d", pc1), 
                   y = sprintf("PC%d", pc2),
-                  color = color)) + 
+                  color = color,
+                  text=hover)
+                ) + 
       geom_point() + 
       xlab(pc1name) + 
       ylab(pc2name) + 
@@ -191,12 +197,21 @@ mod3_plots_pca <- function(D, title = "PCA",
                                 "Scaled ", 
                                 "Non-scaled "),
                          title)
+    ## categorize coloring if color checkbox=T
+    if(categorizing){
+      df[, color] <- factor(df[, color])
+    }
+    # customize hover text
+    # hover_text <- paste0(names(data.frame(rowData(D)))[as.numeric(hover)], ": ", 
+    #                      data.frame(rowData(D))[[as.numeric(hover)]])
     # draw ggplot
     p <- ggplot(data = df, 
                 aes_string(
                   x = sprintf("PC%d", pc1), 
-                  y = sprintf("PC%d", pc2)
-                )) + 
+                  y = sprintf("PC%d", pc2),
+                  color=color,
+                  text=hover)
+                ) + 
       geom_point() + 
       xlab(pc1name) + 
       ylab(pc2name) + 
@@ -204,7 +219,7 @@ mod3_plots_pca <- function(D, title = "PCA",
   }
   
   # draw plotly
-  ggplotly(p) %>%
+  ggplotly(p, tooltip = "text") %>%
     layout(legend = list(orientation = "h",   # show entries horizontally
                          xanchor = "center",  # use center of legend as anchor
                          x = 0.5, ## set position of legend
@@ -222,6 +237,7 @@ mod3_plots_umap <- function (D, title = "UMAP",
                              color,
                              categorizing,
                              n_neighbors, 
+                             hover,
                              ...) {
   X <- t(assay(D))
   if (any(is.na(X))) 
@@ -242,11 +258,16 @@ mod3_plots_umap <- function (D, title = "UMAP",
   if(categorizing){
     df[, color] <- factor(df[, color])
   }
+  # customize hover text
+  # hover_text <- paste0(names(data.frame(colData(D)))[as.numeric(hover)], ": ", 
+  #                      data.frame(colData(D))[[as.numeric(hover)]])
   # draw ggplot
   p <- ggplot(data = df,
               aes_string(x = "comp1", 
                          y = "comp2",
-                         color=color)) + 
+                         color=color,
+                         text=hover)
+              ) + 
     geom_point() + 
     xlab("comp 1") + 
     ylab("comp 2") + 
@@ -255,7 +276,7 @@ mod3_plots_umap <- function (D, title = "UMAP",
     labs(color = color)
   
   # draw plotly
-  ggplotly(p) %>% 
+  ggplotly(p, tooltip = "text") %>% 
     layout(legend = list(orientation = "h",   # show entries horizontally
                          xanchor = "center",  # use center of legend as anchor
                          x = .5,
@@ -503,12 +524,10 @@ ui <- fluidPage(
                                          choices = list("PCA" = "pca", 
                                                         "UMAP" = "umap")
                             ),
-                            br(),   
                             # function argument
-                            uiOutput("mod3_plot_argument"),
-                            br(),
+                            uiOutput("mod3_pca_data"),
                             # select coloring colData and factor it
-                            uiOutput("mod3_color_ui"),
+                            uiOutput("mod3_plot_argument"),
                             br(),
                             tags$p(
                               HTML("<b>Hint:<br></b>Outputs are delayed untill you click 'UPDATE' button after selection."
@@ -574,7 +593,34 @@ ui <- fluidPage(
                )
              )
     ),
-    tabPanel("Module 5", "contents"),
+    tabPanel("Module 5", 
+             sidebarLayout(
+               sidebarPanel(id = "mod5_panel1",
+                            # sidebar autoscroll with main panel
+                            style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
+                            tags$p(
+                              HTML("<b>Module 5</b> requires creating tables, distribution plots, or other graphics to explore the SE object."
+                              )),
+                            radioButtons("mod5_dimension", "Select one dimension:", 
+                                         choices = list("Column Data" = "col", 
+                                                        "Row Data" = "row")
+                            ),
+                            br(),
+                            uiOutput("mod5_dimension_ui"),
+                            br(),
+                            # delay the output
+                            actionButton("mod5_go", "Update")
+               ), 
+               mainPanel(id = "mod5_panel2", 
+                         br(), 
+                         br(), 
+                         br(), 
+                         style = "overflow-y: auto; position: absolute; left: 25%",
+                         downloadButton("mod5_download_plotly", "download plotly"),
+                         plotlyOutput('mod5_plot', height = 600)
+               )
+             )
+    ),
     tabPanel("Module 6", "contents")
   )
 )
@@ -598,10 +644,15 @@ server <- function(input, output) {
   
   # create object list dependent on radio button and stat_name
   output$mod1_select_object_ui <- renderUI({
-    selectInput("mod1_select_object", "Select one object:",
+    if (input$mod1_radio=="stats"){
+      NULL
+    } else {
+      selectInput("mod1_select_object", "Select one object:",
                 width = "220px",
                 choices = distinct(obj_name[obj_name$stat_name==input$mod1_select_statname&obj_name$V1==input$mod1_radio, ], V2)$V2
-    )
+                )
+    }
+    
   })
   
   # create indicator of box plot output
@@ -641,7 +692,7 @@ server <- function(input, output) {
                                         input$mod1_select_statname,
                                         input$mod1_select_object,
                                         input$mod1_box_plot_num)}
-  )
+                                     )
   
 # Define rendering logic of outputs in Module 1 --------------------------------
   
@@ -715,13 +766,11 @@ server <- function(input, output) {
   }
   # render stats table of Mod1
   output$mod1_output_table <- renderDataTable({
-    ## limit table to specified stat_name
-    obj_name <- subset(obj_name, V1==mod1_input_object()[1])
-    obj_name <- subset(obj_name, V2==mod1_input_object()[3])
-    output_order <- obj_name %>%
-      mutate(order=seq(from=1, to=n()))
-    output_order <- subset(output_order, stat_name==mod1_input_object()[2])
-    table <- mtm_res_get_entries(D, c(mod1_input_object()[1], mod1_input_object()[3]))[[output_order$order]]$output$table %>%
+    table <- data.frame(metabolite=row.names(rowData(D)), rowData(D)) %>%
+      left_join(mtm_get_stat_by_name(D, mod1_input_object()[2]), 
+                by=c("metabolite"="var")
+                ) %>%
+      select(c(4, 20:26)) %>%
       ## scientific notation
       mutate(statistic=formatC(statistic, format = "E", digits = 2),
              p.value=formatC(p.value, format = "E", digits = 2),
@@ -731,10 +780,10 @@ server <- function(input, output) {
     ## put interested columns ahead
     table <- if ('term' %in% names(table)) {
       table %>%
-        select(var, statistic, p.value, p.adj, term, everything())
+        select(BIOCHEMICAL, statistic, p.value, p.adj, term, everything())
     } else {
       table %>%
-        select(var, statistic, p.value, p.adj, everything())
+        select(BIOCHEMICAL, statistic, p.value, p.adj, everything())
     }
     datatable(table,
               options = list(
@@ -938,66 +987,107 @@ server <- function(input, output) {
   )
 
 # Define rendering logic of control widgets in Module 3 ------------------------
+  output$mod3_pca_data <- renderUI({
+    if(input$mod3_select_plot=="pca"){
+      selectInput("mod3_pca_data_type", "Select data type for PCA:",
+                  width = "220px",
+                  choices = c("scores", "loadings"),
+                  selected = "scores"
+      )
+    } else {
+      NULL
+    }
+  })
   
+  # create intermediate var to indicate coloring widgets
+  inter_var <- reactive({
+    if (input$mod3_select_plot=="pca" & input$mod3_pca_data_type=="scores") {
+      "pca-scores"
+    } else if(input$mod3_select_plot=="pca" & input$mod3_pca_data_type=="loadings"){
+      "pca-loadings"
+    } else {
+      "umap"
+    }
+  })
   # create reactive plotting argument for PCA/UMAP
   output$mod3_plot_argument <- renderUI({
     switch(
-      input$mod3_select_plot,
-      "pca"=list(selectInput("mod3_pca_data_type", "Select data type for PCA:",
-                             width = "220px",
-                             choices = c("scores", "loadings"),
-                             selected = "scores"
-      ),
+      inter_var(),
+      "pca-scores"=list(
       checkboxInput("mod3_scale_data", "Scaled data", 
                     value = TRUE
-      )
+                    ),
+      selectInput("mod3_select_colData", 
+                  "Select one coloring variable:", 
+                  choices = names(colData(D)),
+                  selected = "BOX.NUMBER",
+                  width = "220px"
+                  ),
+      checkboxInput("mod3_checkbox_factor", 
+                    "Categorical Coloring", 
+                    value = FALSE
+                    ),
+      selectInput("mod3_select_hover", 
+                  "Select hovering text:", 
+                  # selectInput coerces its output to character
+                  # https://github.com/rstudio/shiny/issues/2367
+                  # choices = setNames(seq_along(colData(D)), names(colData(D))),
+                  choices = names(colData(D)),
+                  selected = "sample",
+                  width = "220px",
+                  multiple=FALSE
+                  )
+      ),
+      "pca-loadings"=list(
+      checkboxInput("mod3_scale_data", "Scaled data", 
+                    value = TRUE
+                    ),
+      selectInput("mod3_select_colData", 
+                  "Select one coloring variable:", 
+                  choices = names(rowData(D)),
+                  selected = "BIOCHEMICAL",
+                  width = "220px"
+                  ),
+      checkboxInput("mod3_checkbox_factor", 
+                    "Categorical Coloring", 
+                    value = FALSE
+                    ),
+      selectInput("mod3_select_hover", 
+                  "Select hovering text:", 
+                  # choices = setNames(seq_along(rowData(D)), names(rowData(D))),
+                  choices = names(rowData(D)),
+                  selected = "BIOCHEMICAL",
+                  width = "220px",
+                  multiple=FALSE
+                  )
       ),
       "umap"=list(numericInput("mod3_umap_n_neighbors", 
                                "Number of neighbors for UMAP:", 
                                value = 15,
                                width = "220px"
-      ),
+                               ),
       checkboxInput("mod3_scale_data", "Scaled data", 
                     value = TRUE
-      ),
+                    ),
       selectInput("mod3_select_colData", 
-                  "Select one colData column:", 
+                  "Select one coloring variable:", 
                   choices = names(colData(D)),
                   selected = "BOX.NUMBER",
                   width = "220px"
-      ),
+                  ),
       checkboxInput("mod3_checkbox_factor", 
                     "Categorical Coloring", 
                     value = FALSE
+                    ),
+      selectInput("mod3_select_hover", 
+                  "Select hovering text:", 
+                  # choices = setNames(seq_along(colData(D)), names(colData(D))),
+                  choices = names(colData(D)),
+                  selected = "sample",
+                  width = "220px",
+                  multiple=FALSE
+                  )
       )
-      )
-    )
-  })
-  
-# create intermediate var to indicate coloring widgets
-inter_var <- reactive({
-  if (input$mod3_select_plot=="pca" & input$mod3_pca_data_type=="scores") {
-    "coloring"
-  } else {
-    "no_coloring"
-  }
-})
-
-  output$mod3_color_ui <- renderUI({
-    switch(
-      inter_var(),
-      "coloring"=list(selectInput("mod3_select_colData", 
-                                  "Select one colData column:", 
-                                  choices = names(colData(D)),
-                                  selected = "BOX.NUMBER",
-                                  width = "220px"
-      ),
-      checkboxInput("mod3_checkbox_factor", 
-                    "Categorical Coloring", 
-                    value = FALSE
-      )
-      ),
-      "no_coloring"= NULL
     )
   })
   
@@ -1020,14 +1110,16 @@ inter_var <- reactive({
                      scale_data = mod3_input_object()[3],
                      color = mod3_input_object()[2],
                      categorizing=mod3_input_object()[4],
-                     data_type = mod3_input_object()[5]
+                     data_type = mod3_input_object()[5],
+                     hover = input$mod3_select_hover
       )
     } else {
       mod3_plots_umap(D = D,
                       scale_data = mod3_input_object()[3],  
                       color = mod3_input_object()[2],
                       categorizing=mod3_input_object()[4],
-                      n_neighbors = as.numeric(mod3_input_object()[6])
+                      n_neighbors = as.numeric(mod3_input_object()[6]),
+                      hover = input$mod3_select_hover
       )
     } 
     session_store$mod3_plotly
@@ -1254,6 +1346,92 @@ inter_var <- reactive({
     },
     content = function(file) {
       saveWidget(as_widget(session_store$mod4_box), file, selfcontained = TRUE)
+    }
+  )
+  # Define rendering logic of control widgets in Module 5 ----------------------
+  output$mod5_dimension_ui <- renderUI({
+    switch(input$mod5_dimension,
+           "col"=list(selectInput("mod5_var1_select", 
+                                  "Select the primary variable:", 
+                                  choices = names(colData(D)),
+                                  selected = "Age",
+                                  width = "220px"),
+                      checkboxInput("mod5_var1_type", 
+                                    "Continuous", 
+                                    value = TRUE),
+                      selectInput("mod5_var2_select", 
+                                  "Select the primary variable:", 
+                                  choices = names(colData(D)),
+                                  selected = "sample",
+                                  width = "220px"),
+                      checkboxInput("mod5_var2_type", 
+                                    "Continuous", 
+                                    value = TRUE)
+                      ),
+           "row"=selectInput("mod5_rowdata_plot", 
+                             "Select one plot for row data:", 
+                             choices = c("SUPER_PATHWAY", "SUB_PATHWAY"),
+                             width = "220px")
+    )
+  })
+  
+  # Define rendering logic of outputs in Module 5 ------------------------------
+  mod5_input <- eventReactive(input$mod5_go,{
+    c(input$mod5_var1_select,
+      input$mod5_var1_type,
+      input$mod5_var2_select,
+      input$mod5_var2_type,
+      input$mod5_rowdata_plot)
+  })
+  
+  output$mod5_plot <- renderPlotly({
+    session_store$mod5_plotly <- switch(input$mod5_dimension,
+           "col"=
+             if(mod5_input()[2]==TRUE & mod5_input()[4]==TRUE){
+      p <- ggplot(as.data.frame(colData(D)),
+             aes(!!sym(mod5_input()[3]), !!sym(mod5_input()[1]))
+             ) + geom_point()
+      ggplotly(p)
+    } else if(mod5_input()[2]==TRUE & mod5_input()[4]==FALSE) {
+      p <- ggplot(as.data.frame(colData(D)),
+             aes(!!sym(mod5_input()[3]), !!sym(mod5_input()[1]))
+      ) + geom_boxplot()
+      ggplotly(p)
+    } else if(mod5_input()[2]==FALSE & mod5_input()[4]==TRUE) {
+      p <- ggplot(as.data.frame(colData(D)),
+             aes(!!sym(mod5_input()[1]), !!sym(mod5_input()[3]))
+      ) + geom_boxplot()
+      ggplotly(p)
+    } else {
+      p <- ggplot(as.data.frame(colData(D)),
+             aes(x=!!sym(mod5_input()[3]), fill=!!sym(mod5_input()[1]))
+      ) + geom_bar()
+      ggplotly(p)
+    },
+           "row"=
+      as.data.frame(rowData(D)) %>%
+      rename(var=mod5_input()[5]) %>%
+      group_by(var) %>%
+      summarise(count=n()) %>%
+      plot_ly(labels = ~var, values = ~count, type = 'pie') %>% 
+      layout(legend = list(orientation = "h",   # show entries horizontally
+                           xanchor = "center",  # use center of legend as anchor
+                           x = .5,
+                           y = -.2,
+                           tracegroupgap = 5),
+             autosize = TRUE
+      )
+    )
+    session_store$mod5_plotly
+    }
+  )
+  # download button
+  output$mod5_download_plotly <- downloadHandler(
+    filename = function() {
+      paste("data-", Sys.Date(), ".html", sep = "")
+    },
+    content = function(file) {
+      saveWidget(as_widget(session_store$mod5_plotly), file, selfcontained = TRUE)
     }
   )
 }

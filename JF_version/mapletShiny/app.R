@@ -62,6 +62,7 @@ library(openxlsx)
 library(readxl)
 
 # load SE
+# load("SE_2021-06-14.Rdata")
 load("SE.Rdata")
 
 
@@ -313,7 +314,7 @@ mod3_plots_umap <- function (D, title = "UMAP",
   #                      data.frame(colData(D))[[as.numeric(hover)]])
   # draw ggplot
   p <- ggplot(data = df,
-              do.call(aes_string, as.list(structure(c("x","y",color,hover), names = c("x","y","colour",hover))))
+              do.call(aes_string, as.list(structure(c("x","y",color,hover), names = c("x","y","color","hover"))))
               ) + 
     geom_point() + 
     xlab("comp 1") + 
@@ -334,6 +335,57 @@ mod3_plots_umap <- function (D, title = "UMAP",
   
 }
 
+# define boxplot function in module 5
+mod5_boxplot <- function(x, x_cate, y, y_cate, fill, hover, ...){
+  df <- as.data.frame(colData(D))
+  ## categorize variable if user think it's not continuous
+  if(x_cate==FALSE){
+    df[, x] <- factor(df[, x])
+  }
+  if(y_cate==FALSE){
+    df[, y] <- factor(df[, y])
+  }
+  # to reproduce jitter plot
+  set.seed(4017)
+  p <- ggplot(df,
+              do.call(aes_string, as.list(structure(c(x, y, fill, hover), names = c("x","y", "fill", "hover"))))
+             ) + 
+    geom_boxplot(outlier.shape = NA) +
+    geom_jitter(width = .2, alpha = 0.5) +
+    theme(legend.title = element_blank()) +
+    ggtitle("Boxplot with ignored outliers and Jitter with Set Seed")
+    
+  fig <- ggplotly(p, tooltip=c("x", "y", "hover")) %>%
+   layout(legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3))
+  fig
+}
+
+# define scatterplot function in mod5
+mod5_scatter <- function(x, y, hover, ...){
+  df <- as.data.frame(colData(D))
+  p <- ggplot(df,
+              do.call(aes_string, as.list(structure(c(x, y, hover), names = c("x","y", "hover"))))
+  ) + geom_point()
+  
+  ggplotly(p)
+}
+
+# define barplot function in mod5
+mod5_barplot <- function(x, fill, hover, ...){
+  df <- as.data.frame(colData(D))
+  p <- ggplot(df,
+              do.call(aes_string, as.list(structure(c(x, fill, hover), names = c("x","fill", "hover"))))
+  ) + geom_bar()
+  
+  ggplotly(p) %>%
+    layout(legend = list(orientation = "h",   # show entries horizontally
+                         xanchor = "center",  # use center of legend as anchor
+                         x = 0.5, ## set position of legend
+                         y = -0.2,
+                         tracegroupgap = 5),
+           autosize = TRUE
+    )
+}
 
 ################################################################################
 ########################## Define UI for Shiny application #####################
@@ -617,11 +669,7 @@ ui <- fluidPage(
                          br(), 
                          br(), 
                          style = "overflow-y: auto; position: absolute; left: 25%",
-                         downloadButton("mod5_download_plotly", "download plotly"),
-                         plotlyOutput('mod5_plot', height = 600),
-                         verbatimTextOutput("info"),
-                         downloadButton("mod5_download_plotly2", "download plotly"),
-                         plotlyOutput('mod5_plot2', height = 600)
+                         uiOutput("mod5_output_ui")
                )
              )
     ),
@@ -644,7 +692,7 @@ ui <- fluidPage(
                  tags$hr(),
                  
                  tags$p(HTML("<b>Sheets for Dimensions</b>")),
-                 checkboxInput("mod6_assay_in_row", "Samples in rows?", TRUE),
+                 checkboxInput("mod6_assay_in_row", "Samples in rows?", FALSE),
                  tags$p(HTML("Assay sheet:")),
                  uiOutput("mod6_assay_sheet"),
                  tags$p(HTML("rowData sheet:")),
@@ -668,14 +716,14 @@ ui <- fluidPage(
                  tags$p(HTML("<b>Preprocessing</b>")),
                  tags$p(HTML("Max % missingness per feature:")),
                  numericInput("mod6_filter_feat_max", label = NULL,
-                              value = 1,
+                              value = .5,
                               min = 0,
                               max = 1,
                               step = 0.1,
                               width = "220px"),
                  tags$p(HTML("Max % missingness per feature (normalization):")),
                  numericInput("mod6_feat_max_norm", label = NULL,
-                              value = 1,
+                              value = .2,
                               min = 0,
                               max = 1,
                               step = 0.1,
@@ -724,8 +772,7 @@ ui <- fluidPage(
                  tags$p(HTML("Pathway aggregation in barplot:")),
                  uiOutput("mod6_group_col_barplot"),
                  tags$p(HTML("Barplot coloring column:")),
-                 uiOutput("mod6_color_col_barplot"),
-                 actionButton("mod6_go2", "LOAD RESULT SE")
+                 uiOutput("mod6_color_col_barplot")
                ),
                  
                # Main panel for displaying outputs ----
@@ -1635,18 +1682,43 @@ server <- function(input, output) {
                                     "Continuous", 
                                     value = TRUE),
                       selectInput("mod5_var2_select", 
-                                  "Select the primary variable:", 
+                                  "Select the secondary variable:", 
                                   choices = names(colData(D)),
                                   selected = "sample",
                                   width = "220px"),
                       checkboxInput("mod5_var2_type", 
                                     "Continuous", 
-                                    value = TRUE)
+                                    value = TRUE),
+                      selectInput("mod5_select_hover", 
+                                  "Select hovering text:", 
+                                  choices = names(colData(D)),
+                                  selected = names(colData(D))[1],
+                                  width = "220px",
+                                  multiple=TRUE)
                       ),
            "row"=selectInput("mod5_rowdata_plot", 
                              "Select one plot for row data:", 
                              choices = c("SUPER_PATHWAY"),
                              width = "220px")
+    )
+  })
+  
+  output$mod5_output_ui <- renderUI({
+    switch(input$mod5_dimension,
+           "col"=list(downloadButton("mod5_download_plotly", "download plotly"),
+                      plotlyOutput('mod5_plot', height = 600)),
+           "row"=list(fluidRow(
+        splitLayout(style = "border: 1px", cellWidths = c(1000, 1000), 
+                    downloadButton("mod5_download_plotly", "download plotly"), 
+                    downloadButton("mod5_download_plotly2", "download plotly")
+        )
+      ),
+      fluidRow(
+        splitLayout(style = "height:600px; border: 1px", cellWidths = c(1000, 1000), 
+                    plotlyOutput('mod5_plot', height = 600), 
+                    plotlyOutput('mod5_plot2', height = 600)
+        )
+      ))
     )
   })
   
@@ -1663,40 +1735,44 @@ server <- function(input, output) {
     session_store$mod5_plotly <- switch(input$mod5_dimension,
            "col"=
              if(mod5_input()[2]==TRUE & mod5_input()[4]==TRUE){
-      p <- ggplot(as.data.frame(colData(D)),
-             aes(!!sym(mod5_input()[3]), !!sym(mod5_input()[1]))
-             ) + geom_point()
-      ggplotly(p)
+               mod5_scatter(x=mod5_input()[3], 
+                            y=mod5_input()[1], 
+                            hover = input$mod5_select_hover)
     } else if(mod5_input()[2]==TRUE & mod5_input()[4]==FALSE) {
-      p <- ggplot(as.data.frame(colData(D)),
-             aes(!!sym(mod5_input()[3]), !!sym(mod5_input()[1]))
-      ) + geom_boxplot(outlier.shape = NA) + geom_jitter(width=.1)
-      ggplotly(p)
+      mod5_boxplot(x=mod5_input()[3], 
+                   x_cate = FALSE,
+                   y=mod5_input()[1],
+                   y_cate = TRUE,
+                   fill=mod5_input()[3], 
+                   hover=input$mod5_select_hover)
     } else if(mod5_input()[2]==FALSE & mod5_input()[4]==TRUE) {
-      p <- ggplot(as.data.frame(colData(D)),
-             aes(!!sym(mod5_input()[1]), !!sym(mod5_input()[3]))
-      ) + geom_boxplot(outlier.shape = NA) + geom_jitter(width=.1)
-      ggplotly(p)
+      mod5_boxplot(x=mod5_input()[1], 
+                   x_cate = FALSE,
+                   y=mod5_input()[3],
+                   y_cate = TRUE,
+                   fill=mod5_input()[1], 
+                   hover=input$mod5_select_hover)
     } else {
-      p <- ggplot(as.data.frame(colData(D)),
-             aes(x=!!sym(mod5_input()[3]), fill=!!sym(mod5_input()[1]))
-      ) + geom_bar()
-      ggplotly(p)
+      mod5_barplot(x=mod5_input()[3], 
+                   fill=mod5_input()[1], 
+                   hover = input$mod5_select_hover)
     },
            "row"=
       as.data.frame(rowData(D)) %>%
       rename(var=mod5_input()[5]) %>%
       group_by(var) %>%
       summarise(count=n()) %>%
-      plot_ly(labels = ~var, values = ~count, type = 'pie',
+      plot_ly(labels = ~var, 
+              values = ~count, 
+              type = 'pie',
+              textposition = 'inside',
               source="mod5-click") %>% 
-      layout(legend = list(orientation = "h",   # show entries horizontally
-                           xanchor = "center",  # use center of legend as anchor
-                           x = .5,
-                           y = -.2,
-                           tracegroupgap = 5),
-             autosize = TRUE
-      )
+      layout(autosize = F, width = 1000, height = 500,
+             uniformtext=list(minsize=12, mode='hide'),
+             legend = list(x = 1,
+                           y = .5,
+                           tracegroupgap = 5)
+             )
     )
     session_store$mod5_plotly
     }
@@ -1711,12 +1787,13 @@ server <- function(input, output) {
     }
   )
   
-  output$info <- renderPrint({
-    d5 <- event_data("plotly_click", source = "mod5-click")
-    if(!is.null(d5)){
-      d5
-    }
-  })
+  ## to see the stored data of clicking
+  # output$info <- renderPrint({
+  #   d5 <- event_data("plotly_click", source = "mod5-click")
+  #   if(!is.null(d5)){
+  #     d5
+  #   }
+  # })
   
   output$mod5_plot2 <- renderPlotly({
     d5 <- event_data("plotly_click", source = "mod5-click")
@@ -1731,13 +1808,16 @@ server <- function(input, output) {
         rename(var="SUB_PATHWAY") %>%
         group_by(var) %>%
         summarise(count=n()) %>%
-        plot_ly(labels = ~var, values = ~count, type = 'pie') %>% 
-        layout(legend = list(orientation = "h",   # show entries horizontally
-                             xanchor = "center",  # use center of legend as anchor
-                             x = .5,
-                             y = -.2,
-                             tracegroupgap = 5),
-               autosize = TRUE)
+        plot_ly(labels = ~var, 
+                values = ~count, 
+                type = 'pie', 
+                textposition = 'inside') %>%
+        layout(autosize = F, width = 1000, height = 500,
+               uniformtext=list(minsize=12, mode='hide'),
+               legend = list(x = 1,
+                             y = .5,
+                             tracegroupgap = 5)
+               )
       session_store$mod5_plot2
     }
   })
@@ -1922,7 +2002,7 @@ server <- function(input, output) {
     filename = function() {
       paste0("SE_", Sys.Date(), ".Rdata")
     },
-    content = function(file) {
+    content = function(fname) {
       ## Loading Data ----
       # file for assay
       file_data <- "Module6_Data.xlsx"
@@ -2086,8 +2166,8 @@ server <- function(input, output) {
         diff_analysis_func(var=var,binary=binary,analysis_type=analysis_type, mult_test_method=mult_test_method,alpha=alpha,
                            group_col_barplot=group_col_barplot,color_col_barplot=color_col_barplot) %>%
         {.}
-      # write to local
-      saveRDS(D, file)
+      # write Rdata to local
+      save(D, file=fname)
     }
   )
   

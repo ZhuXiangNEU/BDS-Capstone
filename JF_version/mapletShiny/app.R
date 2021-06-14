@@ -62,6 +62,7 @@ library(openxlsx)
 library(readxl)
 
 # load SE
+# load("SE_2021-06-14.Rdata")
 load("SE.Rdata")
 
 
@@ -617,11 +618,7 @@ ui <- fluidPage(
                          br(), 
                          br(), 
                          style = "overflow-y: auto; position: absolute; left: 25%",
-                         downloadButton("mod5_download_plotly", "download plotly"),
-                         plotlyOutput('mod5_plot', height = 600),
-                         verbatimTextOutput("info"),
-                         downloadButton("mod5_download_plotly2", "download plotly"),
-                         plotlyOutput('mod5_plot2', height = 600)
+                         uiOutput("mod5_output_ui")
                )
              )
     ),
@@ -644,7 +641,7 @@ ui <- fluidPage(
                  tags$hr(),
                  
                  tags$p(HTML("<b>Sheets for Dimensions</b>")),
-                 checkboxInput("mod6_assay_in_row", "Samples in rows?", TRUE),
+                 checkboxInput("mod6_assay_in_row", "Samples in rows?", FALSE),
                  tags$p(HTML("Assay sheet:")),
                  uiOutput("mod6_assay_sheet"),
                  tags$p(HTML("rowData sheet:")),
@@ -668,14 +665,14 @@ ui <- fluidPage(
                  tags$p(HTML("<b>Preprocessing</b>")),
                  tags$p(HTML("Max % missingness per feature:")),
                  numericInput("mod6_filter_feat_max", label = NULL,
-                              value = 1,
+                              value = .5,
                               min = 0,
                               max = 1,
                               step = 0.1,
                               width = "220px"),
                  tags$p(HTML("Max % missingness per feature (normalization):")),
                  numericInput("mod6_feat_max_norm", label = NULL,
-                              value = 1,
+                              value = .2,
                               min = 0,
                               max = 1,
                               step = 0.1,
@@ -724,8 +721,7 @@ ui <- fluidPage(
                  tags$p(HTML("Pathway aggregation in barplot:")),
                  uiOutput("mod6_group_col_barplot"),
                  tags$p(HTML("Barplot coloring column:")),
-                 uiOutput("mod6_color_col_barplot"),
-                 actionButton("mod6_go2", "LOAD RESULT SE")
+                 uiOutput("mod6_color_col_barplot")
                ),
                  
                # Main panel for displaying outputs ----
@@ -1650,6 +1646,25 @@ server <- function(input, output) {
     )
   })
   
+  output$mod5_output_ui <- renderUI({
+    switch(input$mod5_dimension,
+           "col"=list(downloadButton("mod5_download_plotly", "download plotly"),
+                      plotlyOutput('mod5_plot', height = 600)),
+           "row"=list(fluidRow(
+        splitLayout(style = "border: 1px solid silver:", cellWidths = c("50%", "50%"), 
+                    downloadButton("mod5_download_plotly", "download plotly"), 
+                    downloadButton("mod5_download_plotly2", "download plotly")
+        )
+      ),
+      fluidRow(
+        splitLayout(style = "border: 1px solid silver:", cellWidths = c("50%", "50%"), 
+                    plotlyOutput('mod5_plot', height = 600), 
+                    plotlyOutput('mod5_plot2', height = 600)
+        )
+      ))
+    )
+  })
+  
 # Define rendering logic of outputs in Module 5 ------------------------------
   mod5_input <- eventReactive(input$mod5_go,{
     c(input$mod5_var1_select,
@@ -1711,12 +1726,12 @@ server <- function(input, output) {
     }
   )
   
-  output$info <- renderPrint({
-    d5 <- event_data("plotly_click", source = "mod5-click")
-    if(!is.null(d5)){
-      d5
-    }
-  })
+  # output$info <- renderPrint({
+  #   d5 <- event_data("plotly_click", source = "mod5-click")
+  #   if(!is.null(d5)){
+  #     d5
+  #   }
+  # })
   
   output$mod5_plot2 <- renderPlotly({
     d5 <- event_data("plotly_click", source = "mod5-click")
@@ -1922,7 +1937,7 @@ server <- function(input, output) {
     filename = function() {
       paste0("SE_", Sys.Date(), ".Rdata")
     },
-    content = function(file) {
+    content = function(fname) {
       ## Loading Data ----
       # file for assay
       file_data <- "Module6_Data.xlsx"
@@ -2086,8 +2101,8 @@ server <- function(input, output) {
         diff_analysis_func(var=var,binary=binary,analysis_type=analysis_type, mult_test_method=mult_test_method,alpha=alpha,
                            group_col_barplot=group_col_barplot,color_col_barplot=color_col_barplot) %>%
         {.}
-      # write to local
-      saveRDS(D, file)
+      # write Rdata to local
+      save(D, file=fname)
     }
   )
   

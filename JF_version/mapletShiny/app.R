@@ -1,123 +1,29 @@
-################################################################################
-################################## Some Notes ##################################
-################################################################################
-
-# The codes are structured following some general notes of Shiny App, 
-# you can just ignore this part if you are already familiar with Shiny. 
-
-# Three steps to create a Shiny
-# Step one: create layout of user interface (UI)
-  # ui <- ...
-# Step two: create rendering logic underlying the UI
-  # server <- function(input, output) {}
-# Step three: run the App
-  # shinyApp(ui = ui, server = server)
-
-# In ui, you generally define a sidebar panel for all the control widgets 
-# and a main panel for the outputs.
-
-# In the sidebar panel, commonly used widgets include
-#   radioButtons() for single choice by clicking,
-#   selectInput() for single choice by drop down box,
-#   numericInput() for manually type in a number,
-#   checkboxInput() for binary check box,
-#   actionButton() for delayed outputs.
-# You give each control widget an object_name which you refer to by input$object_name.
-
-# In the main panel, you define output objects by 
-#   plotOutput() for plot object,
-#   plotlyOutput() for plotly object,
-#   dataTableOutput() for table object,
-#   downloadButton() for downloading output.
-# You give each output object an object_name which you refer to by output$object_name.
-
-# In server, you define rendering logic of UI objects by 
-#   renderPlot() for plot objects,
-#   renderPlotly() for plotly objects,
-#   renderDataTable() for table objects.
-
-# The input$object_name syntax can only be used inside of render(). 
-# But you can refer to widget value outside of render() by creating reactive_object using reactive().
-
-# In situations when some control widgets have dynamic values or 
-# some outputs have dynamic structure, you define it as uiOutput().
-
-
-
-################################################################################
-######################### load packages and result SE object ###################
-################################################################################
-
 rm(list=ls())
 
+################################################################################
+####################load packages, functions and result SE object ##############
+################################################################################
+
 # load packages
+# devtools::install_github(repo="krumsieklab/maplet@v1.0.1", subdir="maplet")
 library(shiny)
 library(shinyWidgets)
 library(maplet)
-# devtools::install_github(repo="krumsieklab/maplet@v1.0.1", subdir="maplet")
+library(shinydashboard)
+library(shinyjs)
 library(tidyverse)
 library(DT)
 library(plotly)
 library(openxlsx)
 library(readxl)
+library(RColorBrewer)
+# refer help functions
+source("help_functions.R")
 
-# load SE
-# load("SE_2021-06-14.Rdata")
+# load SE with fixed name
 load("SE.Rdata")
-
-
-################################################################################
-############ Create a data frame of object names and stat_name #################
-##################### of all the result objects in SE ##########################
-################################################################################
-
-# Extract the object names
-obj_list <- data.frame()
-for (i in seq_along(metadata(D)$results)) {
-  for (j in seq_along(metadata(D)$results[[i]]$fun)) {
-    obj_list[i, j] <- metadata(D)$results[[i]]$fun[j]
-  }
-}
-
-# Extract the stat_name
-stat_name <- data.frame(stat_name=NA)
-for (i in seq_along(metadata(D)$results)) {
-  stat_name[i, 1] <- if ('stat_name' %in% names(metadata(D)$results[[i]]$args)) {
-    metadata(D)$results[[i]]$args$stat_name
-  } else if ('stat_list' %in% names(metadata(D)$results[[i]]$args) & class(metadata(D)$results[[i]]$args$stat_list)!="call") {
-    metadata(D)$results[[i]]$args$stat_list
-  } else {
-    NA
-  }
-}
-
-# Merge object names and stat_name
-order_id <- 1:nrow(obj_list)
-obj_name <- cbind(order_id, obj_list, stat_name) 
-obj_name$stat_name <- ifelse(is.na(obj_name$stat_name), 
-                             # name it as "(no stat_name)" for non-comparison analysis
-                             "(no stat_name)", 
-                             obj_name$stat_name)
-
-
-
-################################################################################
-######### Move some steps in advance to make server function codes #############
-############## as few as possible to shorten waiting time ######################
-######### as server function runs every time when control widget is updated ####
-################################################################################
-
-# assign an object of all stats tables
-table_stats <- mtm_res_get_entries(D, c("stats", "univ"))
-# assign an object of all stats plots
-plot_stats <- mtm_res_get_entries(D, c("plots", "stats"))
-# assign an object of all box plots
-plot_box <- mtm_res_get_entries(D, c("plots", "box"))
-# assign a data frame of all the object names of box plots
-  # filter() cannot run in Shiny, use subset() instead
-box_obj_name <- subset(obj_name, V1=="plots"&V2=="box")
-box_output_order <- box_obj_name %>%
-  mutate(order=seq(from=1, to=n()))
+# extract object names from result SE 'D'
+obj_name <- get_obj_name(D)
 
 # define pathway annotation column (extracted from corresponding stat_bar
 pwvar <- mtm_res_get_entries(D, c("plots", "stats"))[[1]]$args$group_col
@@ -169,223 +75,7 @@ x[[grep("plots_box_scatter", names(x), value = T)[2]]]$output[[1]]$data %<>%
 x[[grep("plots_box_scatter", names(x), value = T)[2]]]$output[[1]] %>%
   remove_geom("GeomText")
 
-## Get the data set 
-get_data_by_name <- function(D, args.name, plot.nmae, stat.name) {
-  plots <- mtm_res_get_entries(D, c("plots", plot.nmae))
-  for (i in seq_along(plots)) {
-    if (plots[[i]]$args[args.name] == stat.name) {
-      data <- plots[[i]]$output[[1]]$data
-    }
-  }
-  data
-}
 
-# create reverselog_trans for log10-SCALE in volcano plot
-reverselog_trans <- function (base = exp(1)){
-  trans <- function(x) -log(x, base)
-  inv <- function(x) base^(-x)
-  scales::trans_new(paste0("reverselog-", format(base)), trans, inv,
-                    scales::log_breaks(base = base),
-                    domain = c(1e-100, Inf))
-}
-
-# define PCA output function for mod3 referring 'mt_plots_pca'
-mod3_plots_pca <- function(D, title = "PCA", 
-                           ## scale argument
-                           scale_data,
-                           ## color argument
-                           color,
-                           categorizing,
-                           pc1 = 1, pc2 = 2, 
-                           data_type,
-                           hover,
-                           ...){
-  X = t(assay(D))
-  if (any(is.na(X))) 
-    stop("Data matrix for PCA cannot contain NAs")
-  if (!(data_type %in% c("scores", "loadings"))) 
-    stop("Show must be either 'scores' or 'loadings'")
-  # scale scores if scale checkbox=T
-  if (scale_data) 
-    X <- scale(X)
-  pca <- stats::prcomp(x = as.matrix(X), center = F, scale = F)
-  expvar <- (pca$sdev)^2/sum(pca$sdev^2)
-  ## reactivate axis labels
-  pc1name <- sprintf("PC%d (%.1f%%)", pc1, expvar[pc1] * 
-                       100)
-  pc2name <- sprintf("PC%d (%.1f%%)", pc2, expvar[pc2] * 
-                       100)
-  
-  if (data_type == "scores") {
-    df <- data.frame(x = pca$x[, pc1], 
-                     y = pca$x[, pc2], 
-                     colData(D)
-                     )
-    ## reactivate plot title
-    plot_title <- paste0(ifelse(scale_data,
-                                "Scaled ", 
-                                "Non-scaled "),
-                         title, " - ", color)
-    ## categorize coloring if color checkbox=T
-    if(categorizing){
-      df[, color] <- factor(df[, color])
-    }
-    # customize hover text
-    # hover_text <- paste0(names(data.frame(colData(D)))[as.numeric(hover)], ": ", 
-    #                     data.frame(colData(D))[[as.numeric(hover)]])
-    # draw ggplot
-    p <- ggplot(data = df, 
-                do.call(aes_string, as.list(structure(c("x","y",color,hover), names = c("x","y","colour",hover))))
-                ) + 
-      geom_point() + 
-      xlab(pc1name) + 
-      ylab(pc2name) + 
-      ggtitle(plot_title) +
-      ## reactive legend title
-      labs(color = color)
-  } else {
-    df = data.frame(x = pca$rotation[, pc1], 
-                    y = pca$rotation[, pc2], 
-                    rowData(D)
-    )
-    ## reactivate plot title
-    plot_title <- paste0(ifelse(scale_data, 
-                                "Scaled ", 
-                                "Non-scaled "),
-                         title)
-    ## categorize coloring if color checkbox=T
-    if(categorizing){
-      df[, color] <- factor(df[, color])
-    }
-    # customize hover text
-    # hover_text <- paste0(names(data.frame(rowData(D)))[as.numeric(hover)], ": ", 
-    #                      data.frame(rowData(D))[[as.numeric(hover)]])
-    # draw ggplot
-    p <- ggplot(data = df, 
-                do.call(aes_string, as.list(structure(c("x","y",color,hover), names = c("x","y","colour",hover))))
-                ) + 
-      geom_point() + 
-      xlab(pc1name) + 
-      ylab(pc2name) + 
-      ggtitle(plot_title)
-  }
-  
-  # draw plotly
-  ggplotly(p, tooltip = c(color, hover)) %>%
-    layout(legend = list(orientation = "h",   # show entries horizontally
-                         xanchor = "center",  # use center of legend as anchor
-                         x = 0.5, ## set position of legend
-                         y = -0.2,
-                         tracegroupgap = 5),
-           autosize = TRUE
-    )
-}
-
-# define UMAP output function for mod3 referring 'mt_plots_umap'
-mod3_plots_umap <- function (D, title = "UMAP", 
-                             ## scale argument
-                             scale_data,  
-                             ## color argument
-                             color,
-                             categorizing,
-                             n_neighbors, 
-                             hover,
-                             ...) {
-  X <- t(assay(D))
-  if (any(is.na(X))) 
-    stop("Data matrix for UMAP cannot contain NAs")
-  ## dependent on scale checkbox
-  if (scale_data) 
-    X <- scale(X)
-  um <- umap::umap(d = as.matrix(X), n_neighbors = as.numeric(n_neighbors))
-  df <- data.frame(x = um$layout[, 1], y = um$layout[, 2], colData(D))
-  ## reactivate plot title
-  plot_title <- paste0(ifelse(scale_data,
-                              "Scaled ", 
-                              "Non-scaled "), title, 
-                       " with ", n_neighbors, 
-                       " neighbors colored by ", color)
-  ## categorize coloring if color checkbox=T
-  if(categorizing){
-    df[, color] <- factor(df[, color])
-  }
-  # customize hover text
-  # hover_text <- paste0(names(data.frame(colData(D)))[as.numeric(hover)], ": ", 
-  #                      data.frame(colData(D))[[as.numeric(hover)]])
-  # draw ggplot
-  p <- ggplot(data = df,
-              do.call(aes_string, as.list(structure(c("x","y",color,hover), names = c("x","y","color","hover"))))
-              ) + 
-    geom_point() + 
-    xlab("comp 1") + 
-    ylab("comp 2") + 
-    ggtitle(plot_title) +
-    ## reactive legend title
-    labs(color = color)
-  
-  # draw plotly
-  ggplotly(p, tooltip = c(color, hover)) %>% 
-    layout(legend = list(orientation = "h",   # show entries horizontally
-                         xanchor = "center",  # use center of legend as anchor
-                         x = .5,
-                         y = -.2,
-                         tracegroupgap = 5),
-           autosize = TRUE
-    )
-  
-}
-
-# define boxplot function in module 5
-mod5_boxplot <- function(x, x_cate, y, y_cate, fill, hover, ...){
-  df <- as.data.frame(colData(D))
-  ## categorize variable if user think it's not continuous
-  if(x_cate==FALSE){
-    df[, x] <- factor(df[, x])
-  }
-  if(y_cate==FALSE){
-    df[, y] <- factor(df[, y])
-  }
-  # to reproduce jitter plot
-  set.seed(4017)
-  p <- ggplot(df,
-              do.call(aes_string, as.list(structure(c(x, y, fill, hover), names = c("x","y", "fill", "hover"))))
-             ) + 
-    geom_boxplot(outlier.shape = NA) +
-    geom_jitter(width = .2, alpha = 0.5) +
-    theme(legend.title = element_blank()) +
-    ggtitle("Boxplot with ignored outliers and Jitter with Set Seed")
-    
-  fig <- ggplotly(p, tooltip=c("x", "y", "hover")) %>%
-   layout(legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3))
-  fig
-}
-
-# define scatterplot function in mod5
-mod5_scatter <- function(x, y, hover, ...){
-  df <- as.data.frame(colData(D))
-  p <- ggplot(df,
-              do.call(aes_string, as.list(structure(c(x, y, hover), names = c("x","y", "hover"))))
-  ) + geom_point()
-  
-  ggplotly(p)
-}
-
-# define barplot function in mod5
-mod5_barplot <- function(x, fill, hover, ...){
-  df <- as.data.frame(colData(D))
-  p <- ggplot(df,
-              do.call(aes_string, as.list(structure(c(x, fill, hover), names = c("x","fill", "hover"))))
-  ) + geom_bar()
-  
-  ggplotly(p) %>%
-    layout(legend = list(orientation = "h",   # show entries horizontally
-                         xanchor = "center",  # use center of legend as anchor
-                         x = 0.5, ## set position of legend
-                         y = -0.2,
-                         tracegroupgap = 5),
-           autosize = TRUE
-    )
-}
 
 ################################################################################
 ########################## Define UI for Shiny application #####################
@@ -393,8 +83,8 @@ mod5_barplot <- function(x, fill, hover, ...){
 
 ui <- fluidPage(
   
-  # set appearance customization -------------------------------------------------
-
+# set appearance customization -------------------------------------------------
+  
   theme = "bootstrap.css",
   includeCSS("www/style.css"),
   setBackgroundColor("#FFFFFF"),# set canvas background color
@@ -422,8 +112,8 @@ ui <- fluidPage(
     # sticky tabs while scrolling main panel
     position = c("fixed-top"), 
     
-  # Define layout of Module 1 ----------------------------------------------------
-
+# Define layout of Module 1 ----------------------------------------------------
+    
     tabPanel("Module 1", 
              sidebarLayout(
                sidebarPanel(id = "mod1_panel1",
@@ -470,85 +160,85 @@ ui <- fluidPage(
                )
              )
     ), 
-
-  # Define layout of Module 2 ----------------------------------------------------
-
-  tabPanel("Module 2",
-           sidebarLayout(
-             sidebarPanel(
-               id = "mod2_panel1",
-               # sidebar auto-scrolling with main panel
-               style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
-               tags$p(
-                 HTML(
-                   "<b>Module 2:</b> StatsBar plot -> Equalizer/Volcano plot -> Box/Scatter plot."
-                 )
+    
+# Define layout of Module 2 ----------------------------------------------------
+    
+    tabPanel("Module 2",
+             sidebarLayout(
+               sidebarPanel(
+                 id = "mod2_panel1",
+                 # sidebar auto-scrolling with main panel
+                 style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
+                 tags$p(
+                   HTML(
+                     "<b>Module 2:</b> StatsBar plot -> Equalizer/Volcano plot -> Box/Scatter plot."
+                   )
+                 ),
+                 tags$p(
+                   HTML(
+                     "Given a SE and a statname, display a series of interactive plots at different granularities."
+                   )
+                 ),
+                 br(),
+                 selectInput(
+                   "mod2.stat",
+                   "Select one stat name:",
+                   choices = distinct(obj_name[obj_name$V1 == "plots" &
+                                                 obj_name$V2 == "stats",],
+                                      stat_name)$stat_name
+                 ),
+                 br(),
+                 radioButtons(
+                   "mod2.plot1",
+                   "Select plot1 type:",
+                   choices = list("Bar" = "bar",
+                                  "Not Bar" = "null"),
+                   selected  = "bar"
+                 ),
+                 br(),
+                 radioButtons(
+                   "mod2.plot2",
+                   "Select plot2 type:",
+                   choices = list("Equalizer" = "equalizer",
+                                  "Volcano" = "volcano"),
+                   selected  = "volcano"
+                 ),
+                 br(),
+                 radioButtons(
+                   "mod2.plot3",
+                   "Select plot3 type:",
+                   choices = list("Box" = "box",
+                                  "Scatter" = "scatter"),
+                   selected  = "scatter"
+                 ),
+                 br(),
+                 checkboxInput("mod2.categorical", 
+                               "Treat as categorical", 
+                               value = FALSE
+                 ),
+                 br(),
+                 actionButton("mod2_go", "Update")
                ),
-               tags$p(
-                 HTML(
-                   "Given a SE and a statname, display a series of interactive plots at different granularities."
-                 )
-               ),
-               br(),
-               selectInput(
-                 "mod2.stat",
-                 "Select one stat name:",
-                 choices = distinct(obj_name[obj_name$V1 == "plots" &
-                                               obj_name$V2 == "stats",],
-                                    stat_name)$stat_name
-               ),
-               br(),
-               radioButtons(
-                 "mod2.plot1",
-                 "Select plot1 type:",
-                 choices = list("Bar" = "bar",
-                                "Not Bar" = "null"),
-                 selected  = "bar"
-               ),
-               br(),
-               radioButtons(
-                 "mod2.plot2",
-                 "Select plot2 type:",
-                 choices = list("Equalizer" = "equalizer",
-                                "Volcano" = "volcano"),
-                 selected  = "volcano"
-               ),
-               br(),
-               radioButtons(
-                 "mod2.plot3",
-                 "Select plot3 type:",
-                 choices = list("Box" = "box",
-                                "Scatter" = "scatter"),
-                 selected  = "scatter"
-               ),
-               br(),
-               checkboxInput("mod2.categorical", 
-                             "Treat as categorical", 
-                             value = FALSE
-               ),
-               br(),
-               actionButton("mod2_go", "Update")
-             ),
-             mainPanel(
-               id = "mod2_panel2",
-               style = "overflow-y: auto; position: absolute; left: 25%",
-               br(),
-               br(),
-               br(),
-               # Bar plot or not
-               uiOutput("mod2.p1"),
-               br(),
-               # equalizer or volcano
-               uiOutput("mod2.p2"),
-               br(),
-               # box or scatter
-               uiOutput("mod2.p3"),
-               br()
-             )
-           )), 
-
-  # Define layout of Module 3 ----------------------------------------------------
-
+               mainPanel(
+                 id = "mod2_panel2",
+                 style = "overflow-y: auto; position: absolute; left: 25%",
+                 br(),
+                 br(),
+                 br(),
+                 # Bar plot or not
+                 uiOutput("mod2.p1"),
+                 br(),
+                 # equalizer or volcano
+                 uiOutput("mod2.p2"),
+                 br(),
+                 # box or scatter
+                 uiOutput("mod2.p3"),
+                 br()
+               )
+             )), 
+    
+# Define layout of Module 3 ----------------------------------------------------
+    
     tabPanel("Module 3", 
              sidebarLayout(
                sidebarPanel(id = "mod3_panel1",
@@ -588,63 +278,63 @@ ui <- fluidPage(
                )
              )
     ),
-
-  # Define layout of Module 4 --------------------------------------------------
-
-  # Module 4
-  tabPanel("Module 4",
-           sidebarLayout(
-             sidebarPanel(
-               id = "mod4_panel1",
-               # sidebar autoscroll with main panel
-               style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
-               tags$p(
-                 HTML(
-                   "<b>Module 4</b> requires collection on all statistical results in a table given one metabolite name."
-                 )
+    
+# Define layout of Module 4 --------------------------------------------------
+    
+    # Module 4
+    tabPanel("Module 4",
+             sidebarLayout(
+               sidebarPanel(
+                 id = "mod4_panel1",
+                 # sidebar autoscroll with main panel
+                 style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
+                 tags$p(
+                   HTML(
+                     "<b>Module 4</b> requires collection on all statistical results in a table given one metabolite name."
+                   )
+                 ),
+                 tags$p(
+                   HTML(
+                     "When clicking on one row, it should display interactive plots following the same orders in Module 2."
+                   )
+                 ),
+                 # select one metabolite
+                 selectInput(
+                   "mod4_metabolite",
+                   "Select one metabolite:",
+                   width = "220px",
+                   choices = arrange(mtm_res_get_entries(D, c("stats", "univ"))[[1]]$output$table, var)$var,
+                   selected = ""
+                 ),
+                 br(),
+                 checkboxInput("mod4.categorical", 
+                               "Treat as categorical", 
+                               value = FALSE
+                 ),
+                 br(),
+                 # delay the output
+                 actionButton("mod4_go", "Update")
                ),
-               tags$p(
-                 HTML(
-                   "When clicking on one row, it should display interactive plots following the same orders in Module 2."
-                 )
-               ),
-               # select one metabolite
-               selectInput(
-                 "mod4_metabolite",
-                 "Select one metabolite:",
-                 width = "220px",
-                 choices = arrange(mtm_res_get_entries(D, c("stats", "univ"))[[1]]$output$table, var)$var,
-                 selected = ""
-               ),
-               br(),
-               checkboxInput("mod4.categorical", 
-                             "Treat as categorical", 
-                             value = FALSE
-               ),
-               br(),
-               # delay the output
-               actionButton("mod4_go", "Update")
-             ),
-             mainPanel(
-               id = "mod4_panel2",
-               br(),
-               br(),
-               br(),
-               style = "overflow-y: auto; position: absolute; left: 25%",
-               # stats table
-               dataTableOutput('mod4_table'),
-               br(),
-               br(),
-               # volcano plotly
-               uiOutput("mod4.p1"),
-               br(),
-               br(),
-               # box/scatter plotly
-               uiOutput("mod4.p.ui"),
-               uiOutput("mod4.p2")
-             )
-           )), 
-  
+               mainPanel(
+                 id = "mod4_panel2",
+                 br(),
+                 br(),
+                 br(),
+                 style = "overflow-y: auto; position: absolute; left: 25%",
+                 # stats table
+                 dataTableOutput('mod4_table'),
+                 br(),
+                 br(),
+                 # volcano plotly
+                 uiOutput("mod4.p1"),
+                 br(),
+                 br(),
+                 # box/scatter plotly
+                 uiOutput("mod4.p.ui"),
+                 uiOutput("mod4.p2")
+               )
+             )), 
+    
 # Define layout of Module 5 ----------------------------------------------------
     tabPanel("Module 5", 
              sidebarLayout(
@@ -676,126 +366,140 @@ ui <- fluidPage(
 # Define layout of Module 6 ----------------------------------------------------
     tabPanel("Module 6", 
              # Sidebar layout with input and output definitions ----
-             sidebarLayout(
-               # Sidebar panel for inputs ----
-               sidebarPanel(
-                 id = "mod6_panel1",
-                 style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:absolute; width: 80%; overflow-y:auto; ",
-                 # Input: Select a file ----
-                 fileInput("file1", "Uploading File",
-                           multiple = FALSE,
-                           accept = c(".xlsx"),
-                           width = "300px"),
-                 # Input: Checkbox if file has header ----
-                 checkboxInput("header", "Header", TRUE),
-                 
-                 tags$hr(),
-                 
-                 tags$p(HTML("<b>Sheets for Dimensions</b>")),
-                 checkboxInput("mod6_assay_in_row", "Samples in rows?", FALSE),
-                 tags$p(HTML("Assay sheet:")),
-                 uiOutput("mod6_assay_sheet"),
-                 tags$p(HTML("rowData sheet:")),
-                 uiOutput("mod6_rowdata_sheet"),
-                 tags$p(HTML("colData sheet:")),
-                 uiOutput("mod6_coldata_sheet"),
-                 actionButton("mod6_go", "Investigate"),
-                 
-                 tags$hr(),
-                 
-                 tags$p(HTML("<b>ID column for Dimensions</b>")),
-                 tags$p(HTML("ID column in assay:")),
-                 uiOutput("mod6_assay_id_column"),
-                 tags$p(HTML("ID column in rowData:")),
-                 uiOutput("mod6_rowdata_id_column"),
-                 tags$p(HTML("ID column in colData:")),
-                 uiOutput("mod6_coldata_id_column"),
-                 
-                 tags$hr(),
-                 
-                 tags$p(HTML("<b>Preprocessing</b>")),
-                 tags$p(HTML("Max % missingness per feature:")),
-                 numericInput("mod6_filter_feat_max", label = NULL,
-                              value = .5,
-                              min = 0,
-                              max = 1,
-                              step = 0.1,
-                              width = "220px"),
-                 tags$p(HTML("Max % missingness per feature (normalization):")),
-                 numericInput("mod6_feat_max_norm", label = NULL,
-                              value = .2,
-                              min = 0,
-                              max = 1,
-                              step = 0.1,
-                              width = "220px"),
-                 tags$p(HTML("Max % missingness per sample:")),
-                 numericInput("mod6_filter_sample_max", label = NULL,
-                              value = 1,
-                              min = 0,
-                              max = 1,
-                              step = 0.1,
-                              width = "220px"),
-                 tags$p(HTML("Sample coloring column:")),
-                 uiOutput("mod6_pre_sample_color_column"),
-                 tags$p(HTML("Batch column:")),
-                 uiOutput("mod6_pre_batch_column"),
-                 tags$p(HTML("PCA/UMAP coloring column:")),
-                 uiOutput("mod6_pre_pca_color_column"),
-                 tags$p(HTML("Heatmap annotation column:")),
-                 uiOutput("mod6_pre_heatmap_anno_column"),
-                 tags$p(HTML("Heatmap annotation row:")),
-                 uiOutput("mod6_pre_heatmap_anno_row"),
-                 
-                 tags$hr(),
-                 
-                 tags$p(HTML("<b>Differential Analysis</b>")),
-                 tags$p(HTML("Outcome variable:")),
-                 uiOutput("mod6_outcome"),
-                 checkboxInput("mod6_outcome_binary", "Binary outcome?", FALSE),
-                 tags$p(HTML("Type of analysis:")),
-                 selectInput("mod6_analysis_type", label = NULL,
-                             width = "220px",
-                             choices = c("lm","pearson","spearman","kendall"),
-                             selected = "lm"),
-                 tags$p(HTML("Multiple testing correction:")),
-                 selectInput("mod6_mult_test_method", label = NULL,
-                             width = "220px",
-                             choices = c("BH","bonferroni","BY"),
-                             selected = "BH"),
-                 tags$p(HTML("Significance threshold:")),
-                 numericInput("mod6_sig_threshold", label = NULL,
-                              value = 0.05,
-                              min = 0,
-                              max = 1,
-                              step = 0.01,
-                              width = "220px"),
-                 tags$p(HTML("Pathway aggregation in barplot:")),
-                 uiOutput("mod6_group_col_barplot"),
-                 tags$p(HTML("Barplot coloring column:")),
-                 uiOutput("mod6_color_col_barplot")
-               ),
-                 
-               # Main panel for displaying outputs ----
-               mainPanel(
-                 id = "mod6_panel2", 
-                 style = "overflow-y: auto; position: absolute; left: 28%",
-                 br(), 
-                 br(), 
-                 br(), 
-                 # Output: Data file ----
-                 downloadButton("download_se", "Download result SE .Rdata"),
-                 br(),
-                 br(),
-                 dataTableOutput("mod6_assay"),
-                 br(),
-                 br(),
-                 dataTableOutput("mod6_rowdata"),
-                 br(),
-                 br(),
-                 dataTableOutput("mod6_coldata")
+             dashboardPage(
+               dashboardHeader(disable = TRUE),
+               dashboardSidebar(disable = TRUE),
+               dashboardBody(
+                 sidebarLayout(
+                   # Sidebar panel for inputs ----
+                   sidebarPanel(
+                     id = "mod6_panel1",
+                     style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; width: 80%; ",
+                     # Input: Select a file ----
+                     fileInput("file1", "Uploading File",
+                               multiple = FALSE,
+                               accept = c(".xlsx", ".Rdata"),
+                               width = "300px"),
+                     # Input: Checkbox if file has header ----
+                     checkboxInput("header", "Header", TRUE),
+                     
+                     tags$hr(),
+                     
+                     box(solidHeader = T, collapsible = T, collapsed = TRUE,
+                         title="Sheets for Dimensions", width = "350px",
+                         checkboxInput("mod6_assay_in_row", "Samples in rows?", FALSE),
+                         tags$p(HTML("Assay sheet:")),
+                         uiOutput("mod6_assay_sheet"),
+                         tags$p(HTML("rowData sheet:")),
+                         uiOutput("mod6_rowdata_sheet"),
+                         tags$p(HTML("colData sheet:")),
+                         uiOutput("mod6_coldata_sheet"),
+                         actionButton("mod6_go", "Investigate")
+                     ),
+                     
+                     tags$hr(),
+                     
+                     box(solidHeader = T, collapsible = T, collapsed = TRUE,
+                         title="Data Loading", width = "350px",
+                         tags$p(HTML("ID column in assay:")),
+                         uiOutput("mod6_assay_id_column"),
+                         tags$p(HTML("ID column in rowData:")),
+                         uiOutput("mod6_rowdata_id_column"),
+                         tags$p(HTML("ID column in colData:")),
+                         uiOutput("mod6_coldata_id_column"),
+                         actionButton("mod6_go_load", "Run")
+                     ),
+                     
+                     tags$hr(),
+                     
+                     box(solidHeader = T, collapsible = T, collapsed = TRUE,
+                         title="Preprocessing", width = "350px",
+                         tags$p(HTML("Max % missingness per feature:")),
+                         numericInput("mod6_filter_feat_max", label = NULL,
+                                      value = .5,
+                                      min = 0,
+                                      max = 1,
+                                      step = 0.1,
+                                      width = "220px"),
+                         tags$p(HTML("Max % missingness per feature (normalization):")),
+                         numericInput("mod6_feat_max_norm", label = NULL,
+                                      value = .2,
+                                      min = 0,
+                                      max = 1,
+                                      step = 0.1,
+                                      width = "220px"),
+                         tags$p(HTML("Max % missingness per sample:")),
+                         numericInput("mod6_filter_sample_max", label = NULL,
+                                      value = 1,
+                                      min = 0,
+                                      max = 1,
+                                      step = 0.1,
+                                      width = "220px"),
+                         tags$p(HTML("Sample coloring column:")),
+                         uiOutput("mod6_pre_sample_color_column"),
+                         tags$p(HTML("Batch column:")),
+                         uiOutput("mod6_pre_batch_column"),
+                         tags$p(HTML("PCA/UMAP coloring column:")),
+                         uiOutput("mod6_pre_pca_color_column"),
+                         tags$p(HTML("Heatmap annotation column:")),
+                         uiOutput("mod6_pre_heatmap_anno_column"),
+                         tags$p(HTML("Heatmap annotation row:")),
+                         uiOutput("mod6_pre_heatmap_anno_row"),
+                         actionButton("mod6_go_preprocess", "Run")
+                     ),
+                     
+                     tags$hr(),
+                     
+                     box(solidHeader = T, collapsible = T, collapsed = TRUE,
+                         title="Differential Analysis", width = "350px",
+                         tags$p(HTML("Outcome variable:")),
+                         uiOutput("mod6_outcome"),
+                         checkboxInput("mod6_outcome_binary", "Binary outcome?", FALSE),
+                         tags$p(HTML("Type of analysis:")),
+                         selectInput("mod6_analysis_type", label = NULL,
+                                     width = "220px",
+                                     choices = c("lm","pearson","spearman","kendall"),
+                                     selected = "lm"),
+                         tags$p(HTML("Multiple testing correction:")),
+                         selectInput("mod6_mult_test_method", label = NULL,
+                                     width = "220px",
+                                     choices = c("BH","bonferroni","BY"),
+                                     selected = "BH"),
+                         tags$p(HTML("Significance threshold:")),
+                         numericInput("mod6_sig_threshold", label = NULL,
+                                      value = 0.05,
+                                      min = 0,
+                                      max = 1,
+                                      step = 0.01,
+                                      width = "220px"),
+                         tags$p(HTML("Pathway aggregation in barplot:")),
+                         uiOutput("mod6_group_col_barplot"),
+                         tags$p(HTML("Barplot coloring column:")),
+                         uiOutput("mod6_color_col_barplot"),
+                         actionButton("mod6_go_differ", "Run")
+                     )
+                   ),
+                   
+                   # Main panel for displaying outputs ----
+                   mainPanel(
+                     id = "mod6_panel2", 
+                     style = "overflow-y: auto; max-height: 100vh; position: absolute; left: 28%",
+                     br(), 
+                     br(), 
+                     br(), 
+                     # Output: Data file ----
+                     downloadButton("download_se", "Download result SE .Rdata"),
+                     br(),
+                     br(),
+                     uiOutput("mod6_main_panel")
+                   )
                  )
                )
              )
+             
+             
+             
+    )
   )
 )
 
@@ -804,14 +508,14 @@ ui <- fluidPage(
 ################################################################################
 
 server <- function(input, output) {
-
+  
 # Define rendering logic of control widgets in Module 1 ------------------------
   
   # create stat_name list dependent on radio button
   output$mod1_select_statname_ui <- renderUI({
     selectInput("mod1_select_statname", "Select one stat name:",
                 width = "220px",
-                choices = distinct(obj_name[obj_name$V1==input$mod1_radio, ], stat_name)$stat_name
+                choices = dplyr::distinct(obj_name[obj_name$V1==input$mod1_radio, ], stat_name)$stat_name
     )
   })
   
@@ -821,9 +525,9 @@ server <- function(input, output) {
       NULL
     } else {
       selectInput("mod1_select_object", "Select one object:",
-                width = "220px",
-                choices = distinct(obj_name[obj_name$stat_name==input$mod1_select_statname&obj_name$V1==input$mod1_radio, ], V2)$V2
-                )
+                  width = "220px",
+                  choices = dplyr::distinct(obj_name[obj_name$stat_name==input$mod1_select_statname&obj_name$V1==input$mod1_radio, ], V2)$V2
+      )
     }
     
   })
@@ -839,6 +543,12 @@ server <- function(input, output) {
   
   ## get the order of selected stat_name
   ord <- reactive({
+    # assign a data frame of all the object names of box plots
+    # filter() cannot run in Shiny, use subset() instead
+    box_obj_name <- subset(obj_name, V1=="plots"&V2=="box")
+    box_output_order <- box_obj_name %>%
+      dplyr::mutate(order=seq(from=1, to=n()))
+    
     if(input$mod1_select_statname %in% box_output_order$stat_name){
       box_output_order[box_output_order$stat_name==input$mod1_select_statname, ]$order
     } else {
@@ -848,6 +558,9 @@ server <- function(input, output) {
   
   ## create dynamic choices of number of box plots to render 
   output$mod1_box_plot_num_ui <- renderUI({
+    # assign an object of all box plots
+    plot_box <- mtm_res_get_entries(D, c("plots", "box"))
+    
     switch(
       box_switch(),
       "box_plot"=list(selectInput("mod1_box_plot_num", 
@@ -865,7 +578,7 @@ server <- function(input, output) {
                                         input$mod1_select_statname,
                                         input$mod1_select_object,
                                         input$mod1_box_plot_num)}
-                                     )
+  )
   
 # Define rendering logic of outputs in Module 1 --------------------------------
   
@@ -875,7 +588,7 @@ server <- function(input, output) {
     obj_name <- subset(obj_name, V1==mod1_input_object()[1])
     obj_name <- subset(obj_name, V2==mod1_input_object()[3])
     output_order <- obj_name %>%
-      mutate(order=seq(from=1, to=n()))
+      dplyr::mutate(order=seq(from=1, to=n()))
     output_order <- subset(output_order, stat_name==mod1_input_object()[2])
     plots <- list()
     for(plot_i in seq_along(output_order$order)){
@@ -917,7 +630,7 @@ server <- function(input, output) {
         obj_name <- subset(obj_name, V1==mod1_input_object()[1])
         obj_name <- subset(obj_name, V2==mod1_input_object()[3])
         output_order <- obj_name %>%
-          mutate(order=seq(from=1, to=n()))
+          dplyr::mutate(order=seq(from=1, to=n()))
         output_order <- subset(output_order, stat_name==mod1_input_object()[2])
         plots <- list()
         for(plot_i in seq_along(output_order$order)){
@@ -942,15 +655,15 @@ server <- function(input, output) {
     table <- data.frame(var=row.names(rowData(D)), rowData(D)) %>%
       left_join(mtm_get_stat_by_name(D, mod1_input_object()[2]), 
                 by=c("var"="var")
-                ) %>%
-      select(c(2, 20:26))
+      ) %>%
+      dplyr::select(c(2, 20:26))
     
     ## put interested columns ahead
     table <- if ('term' %in% names(table)) {
       table %>%
-        select(name, statistic, p.value, p.adj, term, everything()) %>%
+        dplyr::select(name, statistic, p.value, p.adj, term, dplyr::everything()) %>%
         ## scientific notation
-        mutate(statistic=formatC(statistic, format = "E", digits = 2),
+        dplyr::mutate(statistic=formatC(statistic, format = "E", digits = 2),
                p.value=formatC(p.value, format = "E", digits = 2),
                p.adj=formatC(p.adj, format = "E", digits = 2),
                estimate=formatC(estimate, format = "E", digits = 2),
@@ -958,7 +671,7 @@ server <- function(input, output) {
         )
     } else {
       table %>%
-        select(name, statistic, p.value, p.adj, everything())
+        dplyr::select(name, statistic, p.value, p.adj, dplyr::everything())
     }
     datatable(table,
               options = list(
@@ -979,15 +692,14 @@ server <- function(input, output) {
       "stats" = dataTableOutput("mod1_output_table")
     )
   })
-
+  
 # Define rendering logic of outputs in Module 2 --------------------------------
   # Module 2: create reactive inputs list
   mod2_input_object <- eventReactive(input$mod2_go, 
                                      {c(input$mod2.stat,
                                         input$mod2.plot1,
                                         input$mod2.plot2,
-                                        input$mod2.plot3,
-                                        input$mod2.categorical)}
+                                        input$mod2.plot3)}
   )
   
   # Module 2: store reactive output plots
@@ -1095,21 +807,27 @@ server <- function(input, output) {
     
     # draw the plot2
     plot <- data_vol %>%
-      ggplot(aes(x = statistic, y = p.value, color = !!sym(legend_name))) +
+      ggplot(aes(x = statistic, y = p.value, color = !!sym(legend_name), label = name)) +
       geom_point() +
       scale_y_continuous(trans = reverselog_trans(10),
                          breaks = scales::trans_breaks("log10", function(x) 10^x),
                          labels = scales::trans_format("log10", scales::math_format(10^.x))) +
       labs(y = "p-value") +
-      ggtitle(paste0(inputs[1]))
+      ggtitle(paste0(inputs[1])) +
+      scale_color_brewer(palette="Dark2")
     
     if (inputs[2] == "bar") {
       plot <- plot +
-        ggtitle(paste0(sub_pathway_name, "-", inputs[1]))
+        geom_point(size = 3)
+      ggtitle(paste0(sub_pathway_name, "-", inputs[1]))
     }
     
     session_store$mod2.vol <- ggplotly(plot, source = "sub_vol") %>%
-      layout(legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3))
+      layout(legend = list(orientation = 'h',
+                           xanchor = "center",
+                           x = 0.5,
+                           y = -0.2,
+                           title = list(text=paste0('<b> ', legend_name, ' </b>'))))
     session_store$mod2.vol
   })
   
@@ -1296,7 +1014,15 @@ server <- function(input, output) {
           names <- unlist(row_data[row_data[pwvar] == sub_pathway_name,]$name)
           data_vol <- data_vol[data_vol$name %in% names, ]
         }
-        metabolite <- data_vol[as.numeric(d.vol$pointNumber) + 1,]$var[1]
+        # set the column curveNumber by color legend
+        p.adj.significant <- alpha
+        data_vol[, "curveNumber"] <- ifelse(data_vol$p.adj < as.numeric(p.adj.significant), 1, 0)
+        data_vol_true <- data_vol[data_vol$curveNumber==1, ]
+        data_vol_false <- data_vol[data_vol$curveNumber==0, ]
+        # By using click info (curveNumber & ponitNumber) to get the metabolite name
+        metabolite <- ifelse(d.vol$curveNumber == 1,
+                             data_vol_true[d.vol$pointNumber + 1, ]$var[1],
+                             data_vol_false[d.vol$pointNumber + 1, ]$var[1])
         term <- data_vol$term[1]
         
       }
@@ -1306,7 +1032,7 @@ server <- function(input, output) {
     data <- data[data$var == metabolite, ]
     
     # Treat as categorical or not?
-    if (inputs[5]) {
+    if (input$mod2.categorical) {
       data[, term] <- factor(data[, term])
     } else {
       data[, term] <- as.numeric(data[, term])
@@ -1320,9 +1046,9 @@ server <- function(input, output) {
         ggtitle(metabolite)
     } else {
       plot <- data %>%
-        ggplot(aes(x = !!sym(term), y = var)) +
+        ggplot(aes(x = var, y = !!sym(term))) +
         geom_boxplot() +
-        geom_jitter(width = 0.2) +
+        #geom_jitter(width = 0.2) +
         ggtitle(metabolite)
     }
     
@@ -1340,7 +1066,7 @@ server <- function(input, output) {
       ggsave(file, plot = session_store$mod2.box.scatter, device = device)
     }
   )
-
+  
 # Define rendering logic of control widgets in Module 3 ------------------------
   output$mod3_pca_data <- renderUI({
     if(input$mod3_select_plot=="pca"){
@@ -1369,71 +1095,71 @@ server <- function(input, output) {
     switch(
       inter_var(),
       "pca-scores"=list(
-      checkboxInput("mod3_scale_data", "Scaled data", 
-                    value = TRUE
-                    ),
-      selectInput("mod3_select_colData", 
-                  "Select one coloring variable:", 
-                  choices = names(colData(D)),
-                  selected = "BOX.NUMBER",
-                  width = "220px"
-                  ),
-      checkboxInput("mod3_checkbox_factor", 
-                    "Categorical Coloring", 
-                    value = FALSE
-                    ),
-      selectInput("mod3_select_hover", 
-                  "Select hovering text:", 
-                  # selectInput coerces its output to character
-                  # https://github.com/rstudio/shiny/issues/2367
-                  # choices = setNames(seq_along(colData(D)), names(colData(D))),
-                  choices = names(colData(D)),
-                  selected = "sample",
-                  width = "220px",
-                  multiple=TRUE
-                  )
+        checkboxInput("mod3_scale_data", "Scaled data", 
+                      value = TRUE
+        ),
+        selectInput("mod3_select_colData", 
+                    "Select one coloring variable:", 
+                    choices = names(colData(D)),
+                    selected = "BOX.NUMBER",
+                    width = "220px"
+        ),
+        checkboxInput("mod3_checkbox_factor", 
+                      "Categorical Coloring", 
+                      value = FALSE
+        ),
+        selectInput("mod3_select_hover", 
+                    "Select hovering text:", 
+                    # selectInput coerces its output to character
+                    # https://github.com/rstudio/shiny/issues/2367
+                    # choices = setNames(seq_along(colData(D)), names(colData(D))),
+                    choices = names(colData(D)),
+                    selected = "sample",
+                    width = "220px",
+                    multiple=TRUE
+        )
       ),
       "pca-loadings"=list(
-      checkboxInput("mod3_scale_data", "Scaled data", 
-                    value = TRUE
-                    ),
-      selectInput("mod3_select_colData", 
-                  "Select one coloring variable:", 
-                  choices = names(rowData(D)),
-                  selected = "SUPER_PATHWAY",
-                  width = "220px"
-                  ),
-      checkboxInput("mod3_checkbox_factor", 
-                    "Categorical Coloring", 
-                    value = FALSE
-                    ),
-      selectInput("mod3_select_hover", 
-                  "Select hovering text:", 
-                  # choices = setNames(seq_along(rowData(D)), names(rowData(D))),
-                  choices = names(rowData(D)),
-                  selected = "name",
-                  width = "220px",
-                  multiple=TRUE
-                  )
+        checkboxInput("mod3_scale_data", "Scaled data", 
+                      value = TRUE
+        ),
+        selectInput("mod3_select_colData", 
+                    "Select one coloring variable:", 
+                    choices = names(rowData(D)),
+                    selected = "SUPER_PATHWAY",
+                    width = "220px"
+        ),
+        checkboxInput("mod3_checkbox_factor", 
+                      "Categorical Coloring", 
+                      value = FALSE
+        ),
+        selectInput("mod3_select_hover", 
+                    "Select hovering text:", 
+                    # choices = setNames(seq_along(rowData(D)), names(rowData(D))),
+                    choices = names(rowData(D)),
+                    selected = "name",
+                    width = "220px",
+                    multiple=TRUE
+        )
       ),
       "umap"=list(numericInput("mod3_umap_n_neighbors", 
                                "Number of neighbors for UMAP:", 
                                value = 15,
                                width = "220px"
-                               ),
+      ),
       checkboxInput("mod3_scale_data", "Scaled data", 
                     value = TRUE
-                    ),
+      ),
       selectInput("mod3_select_colData", 
                   "Select one coloring variable:", 
                   choices = names(colData(D)),
                   selected = "BOX.NUMBER",
                   width = "220px"
-                  ),
+      ),
       checkboxInput("mod3_checkbox_factor", 
                     "Categorical Coloring", 
                     value = FALSE
-                    ),
+      ),
       selectInput("mod3_select_hover", 
                   "Select hovering text:", 
                   # choices = setNames(seq_along(colData(D)), names(colData(D))),
@@ -1441,7 +1167,7 @@ server <- function(input, output) {
                   selected = "sample",
                   width = "220px",
                   multiple=TRUE
-                  )
+      )
       )
     )
   })
@@ -1455,7 +1181,7 @@ server <- function(input, output) {
                                         input$mod3_pca_data_type,
                                         input$mod3_umap_n_neighbors)}
   )
-
+  
 # Define rendering logic of outputs in Module 3 --------------------------------
   
   # render pca/umap of mod3
@@ -1497,22 +1223,26 @@ server <- function(input, output) {
     eventReactive(input$mod4_go,
                   {
                     table <- data.frame()
+                    # assign an object of all stats tables
                     table_stats <- mtm_res_get_entries(D, c("stats", "univ"))
+                    # assign an object of all stats plots
+                    plot_stats <- mtm_res_get_entries(D, c("plots", "stats"))
                     for (i in 2:length(table_stats)) {
                       tab <- table_stats[[i]]$output$table %>%
-                        mutate(`stat name` = plot_stats[[i - 1]]$args$stat_list)
+                        dplyr::mutate(`stat name` = plot_stats[[i - 1]]$args$stat_list)
                       table <- rbind(table, tab)
                     }
                     table <- table %>%
-                      select(var, statistic, p.value, p.adj, `stat name`, estimate, std.error) %>%
-                      mutate(
+                      dplyr::select(var, statistic, p.value, p.adj, `stat name`, estimate, std.error) %>%
+                      dplyr::mutate(
                         statistic = formatC(statistic, format = "E", digits = 2),
                         p.value = formatC(p.value, format = "E", digits = 2),
                         p.adj = formatC(p.adj, format = "E", digits = 2),
                         estimate = formatC(estimate, format = "E", digits = 2),
                         std.error = formatC(std.error, format = "E", digits = 2)
                       ) %>%
-                      filter(var == input$mod4_metabolite)
+                      dplyr::filter(var == input$mod4_metabolite) %>%
+                      dplyr::rename("name" = var)
                   })
   
   # Module 4: output the stats table
@@ -1526,7 +1256,7 @@ server <- function(input, output) {
                 lengthMenu = c(10, 20, 50)
               )
     )
-  })  
+  })
   
   # mod4； catch the selected row
   observe({
@@ -1538,8 +1268,8 @@ server <- function(input, output) {
   # mod4: extract the stat_name
   stat_name_selected <- reactive({
     mod4_metabolite_table() %>% 
-      slice(round(as.numeric(session_store$mod4.tb.row))) %>%
-      select(`stat name`)
+      dplyr::slice(round(as.numeric(session_store$mod4.tb.row))) %>%
+      dplyr::select(`stat name`)
   })
   
   # Module 4: volcano plot
@@ -1560,18 +1290,25 @@ server <- function(input, output) {
     
     # Set the legend color column
     data_vol[, "isSelected"] <- ifelse(data_vol$var==isSelected, TRUE, FALSE)
+    highlight_point <- data_vol[data_vol$isSelected==TRUE, ]
     
     plot <- data_vol %>%
-      ggplot(aes(x = statistic, y = p.value, color = isSelected)) +
+      ggplot(aes(x = statistic, y = p.value, color = isSelected, label = name)) +
       geom_point() +
+      geom_point(data=highlight_point, size = 3) +
       scale_y_continuous(trans = reverselog_trans(10),
                          breaks = scales::trans_breaks("log10", function(x) 10^x),
                          labels = scales::trans_format("log10", scales::math_format(10^.x))) +
       labs(y = "p-value") +
-      ggtitle(paste0(stat_name_selected()))
+      ggtitle(paste0(stat_name_selected(), "-", isSelected)) +
+      scale_color_manual(values=c("#999999", "red"))
     
     session_store$mod4.vol <- ggplotly(plot, source = "mod4_sub_vol") %>%
-      layout(legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3))
+      layout(legend = list(orientation = 'h',
+                           xanchor = "center",
+                           x = 0.5,
+                           y = -0.2,
+                           title = list(text='<b> isSelected </b>')))
     session_store$mod4.vol
   })
   
@@ -1627,7 +1364,17 @@ server <- function(input, output) {
     
     if (!is.null(d)) {
       data_vol <- get_data_by_name(D, "stat_name", "volcano", stat_name_selected())
-      metabolite <- data_vol[as.numeric(d$pointNumber) + 1,]$var[1]
+      
+      # set the column curveNumber by color legend
+      isSelected <- input$mod4_metabolite
+      data_vol[, "curveNumber"] <- ifelse(data_vol$var==isSelected, 1, 0)
+      data_vol_true <- data_vol[data_vol$curveNumber==1, ]
+      data_vol_false <- data_vol[data_vol$curveNumber==0, ]
+      
+      # By using click info (curveNumber & ponitNumber) to get the metabolite name
+      metabolite <- ifelse(d$curveNumber == 1,
+                           data_vol_true[d$pointNumber + 1, ]$var[1],
+                           data_vol_false[d$pointNumber + 1, ]$var[1])
       term <- data_vol$term[1]
       
       # Filter the data by metabolite name
@@ -1648,9 +1395,9 @@ server <- function(input, output) {
           ggtitle(metabolite)
       } else {
         plot <- data %>%
-          ggplot(aes(x = !!sym(term), y = var)) +
+          ggplot(aes(x = var, y = !!sym(term))) +
           geom_boxplot() +
-          geom_jitter(width = 0.2) +
+          #geom_jitter(width = 0.2) +
           ggtitle(metabolite)
       }
     }
@@ -1695,7 +1442,7 @@ server <- function(input, output) {
                                   selected = names(colData(D))[1],
                                   width = "220px",
                                   multiple=TRUE)
-                      ),
+           ),
            "row"=selectInput("mod5_rowdata_plot", 
                              "Select one plot for row data:", 
                              choices = c("SUPER_PATHWAY"),
@@ -1708,17 +1455,17 @@ server <- function(input, output) {
            "col"=list(downloadButton("mod5_download_plotly", "download plotly"),
                       plotlyOutput('mod5_plot', height = 600)),
            "row"=list(fluidRow(
-        splitLayout(style = "border: 1px", cellWidths = c(1000, 1000), 
-                    downloadButton("mod5_download_plotly", "download plotly"), 
-                    downloadButton("mod5_download_plotly2", "download plotly")
-        )
-      ),
-      fluidRow(
-        splitLayout(style = "height:600px; border: 1px", cellWidths = c(1000, 1000), 
-                    plotlyOutput('mod5_plot', height = 600), 
-                    plotlyOutput('mod5_plot2', height = 600)
-        )
-      ))
+             splitLayout(style = "border: 1px", cellWidths = c(1000, 1000), 
+                         downloadButton("mod5_download_plotly", "download plotly"), 
+                         downloadButton("mod5_download_plotly2", "download plotly")
+             )
+           ),
+           fluidRow(
+             splitLayout(style = "height:600px; border: 1px", cellWidths = c(1000, 1000), 
+                         plotlyOutput('mod5_plot', height = 600), 
+                         plotlyOutput('mod5_plot2', height = 600)
+             )
+           ))
     )
   })
   
@@ -1733,49 +1480,50 @@ server <- function(input, output) {
   
   output$mod5_plot <- renderPlotly({
     session_store$mod5_plotly <- switch(input$mod5_dimension,
-           "col"=
-             if(mod5_input()[2]==TRUE & mod5_input()[4]==TRUE){
-               mod5_scatter(x=mod5_input()[3], 
-                            y=mod5_input()[1], 
-                            hover = input$mod5_select_hover)
-    } else if(mod5_input()[2]==TRUE & mod5_input()[4]==FALSE) {
-      mod5_boxplot(x=mod5_input()[3], 
-                   x_cate = FALSE,
-                   y=mod5_input()[1],
-                   y_cate = TRUE,
-                   fill=mod5_input()[3], 
-                   hover=input$mod5_select_hover)
-    } else if(mod5_input()[2]==FALSE & mod5_input()[4]==TRUE) {
-      mod5_boxplot(x=mod5_input()[1], 
-                   x_cate = FALSE,
-                   y=mod5_input()[3],
-                   y_cate = TRUE,
-                   fill=mod5_input()[1], 
-                   hover=input$mod5_select_hover)
-    } else {
-      mod5_barplot(x=mod5_input()[3], 
-                   fill=mod5_input()[1], 
-                   hover = input$mod5_select_hover)
-    },
-           "row"=
-      as.data.frame(rowData(D)) %>%
-      rename(var=mod5_input()[5]) %>%
-      group_by(var) %>%
-      summarise(count=n()) %>%
-      plot_ly(labels = ~var, 
-              values = ~count, 
-              type = 'pie',
-              textposition = 'inside',
-              source="mod5-click") %>% 
-      layout(autosize = F, width = 1000, height = 500,
-             uniformtext=list(minsize=12, mode='hide'),
-             legend = list(x = 1,
-                           y = .5,
-                           tracegroupgap = 5)
-             )
+                                        "col"=
+                                          if(mod5_input()[2]==TRUE & mod5_input()[4]==TRUE){
+                                            mod5_scatter(D, x=mod5_input()[3], 
+                                                         y=mod5_input()[1], 
+                                                         hover = input$mod5_select_hover)
+                                          } else if(mod5_input()[2]==TRUE & mod5_input()[4]==FALSE) {
+                                            mod5_boxplot(D, x=mod5_input()[3], 
+                                                         x_cate = FALSE,
+                                                         y=mod5_input()[1],
+                                                         y_cate = TRUE,
+                                                         fill=mod5_input()[3], 
+                                                         hover=input$mod5_select_hover)
+                                          } else if(mod5_input()[2]==FALSE & mod5_input()[4]==TRUE) {
+                                            mod5_boxplot(D, x=mod5_input()[1], 
+                                                         x_cate = FALSE,
+                                                         y=mod5_input()[3],
+                                                         y_cate = TRUE,
+                                                         fill=mod5_input()[1], 
+                                                         hover=input$mod5_select_hover)
+                                          } else {
+                                            mod5_barplot(D, x=mod5_input()[3], 
+                                                         fill=mod5_input()[1], 
+                                                         hover = input$mod5_select_hover)
+                                          },
+                                        "row"=
+                                          rowData(D) %>%
+                                          data.frame %>%
+                                          dplyr::rename(var=mod5_input()[5]) %>%
+                                          dplyr::group_by(var) %>%
+                                          dplyr::summarise(count=n()) %>%
+                                          plot_ly(labels = ~var, 
+                                                  values = ~count, 
+                                                  type = 'pie',
+                                                  textposition = 'inside',
+                                                  source="mod5-click") %>% 
+                                          layout(autosize = F, width = 1000, height = 500,
+                                                 uniformtext=list(minsize=12, mode='hide'),
+                                                 legend = list(x = 1,
+                                                               y = .5,
+                                                               tracegroupgap = 5)
+                                          )
     )
     session_store$mod5_plotly
-    }
+  }
   )
   # download button
   output$mod5_download_plotly <- downloadHandler(
@@ -1805,9 +1553,9 @@ server <- function(input, output) {
       
       session_store$mod5_plot2 <- 
         pie_dat[pie_dat$SUPER_PATHWAY == label, ] %>%
-        rename(var="SUB_PATHWAY") %>%
-        group_by(var) %>%
-        summarise(count=n()) %>%
+        dplyr::rename(var="SUB_PATHWAY") %>%
+        dplyr::group_by(var) %>%
+        dplyr::summarise(count=n()) %>%
         plot_ly(labels = ~var, 
                 values = ~count, 
                 type = 'pie', 
@@ -1817,7 +1565,7 @@ server <- function(input, output) {
                legend = list(x = 1,
                              y = .5,
                              tracegroupgap = 5)
-               )
+        )
       session_store$mod5_plot2
     }
   })
@@ -1831,7 +1579,7 @@ server <- function(input, output) {
     }
   )
   
-  # Define rendering logic of control widgets in Module 6 ----------------------
+# Define rendering logic of control widgets in Module 6 ----------------------
   
   output$mod6_assay_sheet <- renderUI({
     req(input$file1)
@@ -1844,14 +1592,14 @@ server <- function(input, output) {
     read_excel(as.character(input$file1$datapath),
                col_names = input$header,
                sheet=input$assay_sheet)
-    })
+  })
   
   output$mod6_rowdata_sheet <- renderUI({
     req(input$file1)
     selectInput("rowdata_sheet", label = NULL,
                 width = "220px",
                 choices = getSheetNames(as.character(input$file1$datapath))
-                )
+    )
   })
   df_rowdata <- reactive({
     read_excel(as.character(input$file1$datapath),
@@ -1906,7 +1654,7 @@ server <- function(input, output) {
                 choices = colnames(df_coldata())
     )
   })
- 
+  
   output$mod6_pre_pca_color_column <- renderUI({
     selectInput("pre_pca_color_column", label = NULL,
                 width = "220px",
@@ -1949,11 +1697,40 @@ server <- function(input, output) {
     )
   })
   
-  # Define rendering logic of outputs in Module 6 ------------------------------
+# Define rendering logic of outputs in Module 6 ------------------------------
   mod6_filepath <- 
     eventReactive(input$mod6_go, ## delayed output
                   {c(input$file1$datapath)
-                    })
+                  })
+  
+  observeEvent(input$mod6_go,{
+    output$mod6_main_panel <- renderUI({
+      list(dataTableOutput("mod6_assay"),
+           br(),br(),
+           dataTableOutput("mod6_rowdata"),
+           br(),br(),
+           dataTableOutput("mod6_coldata"))
+    })
+  })
+  
+  observeEvent(input$mod6_go_load,{
+    output$mod6_main_panel <- renderUI({
+      textOutput("log_load")
+    })
+  })
+  
+  observeEvent(input$mod6_go_preprocess,{
+    output$mod6_main_panel <- renderUI({
+      textOutput("log_preprocess")
+    })
+  })
+  
+  observeEvent(input$mod6_go_differ,{
+    output$mod6_main_panel <- renderUI({
+      textOutput("log_differ")
+    })
+  })
+  
   
   output$mod6_assay <- renderDataTable({
     table <- read_excel(as.character(mod6_filepath()),
@@ -2171,7 +1948,150 @@ server <- function(input, output) {
     }
   )
   
+  output$log_load <- renderText({
+    capture.output(
+      # set working directory to source file location
+      setwd(dirname(rstudioapi::getActiveDocumentContext()$path)),
+      # Reactive arguments ----
+      ## Loading Data ----
+      # file for assay
+      file_data <- "Module6_Data.xlsx",
+      # data sheet
+      sheet_data <- "data", 
+      # samples in rows?
+      sir <- F, 
+      # id column
+      id_col_data <- "BIOCHEMICAL", 
+      # file for rowData
+      file_feature <- file_data, 
+      # data sheet
+      sheet_feature <- "metanno", 
+      # id column
+      id_col_feature <- "BIOCHEMICAL", 
+      # file for coData
+      file_sample <- file_data, 
+      # data sheet
+      sheet_sample <- "sampleanno", 
+      # id column
+      id_col_sample <- "SAMPLE_NAME" 
+    )
+  })
   
+  output$log_preprocess <- renderText({
+    capture.output(
+      # set working directory to source file location
+      setwd(dirname(rstudioapi::getActiveDocumentContext()$path)),
+      # Reactive arguments ----
+      ## Loading Data ----
+      # file for assay
+      file_data <- "Module6_Data.xlsx",
+      # data sheet
+      sheet_data <- "data", # to be choosen by dropdown menu displaying available sheet names from file_data
+      # samples in rows?
+      sir <- F, # checkbox for T/F values
+      # id column
+      id_col_data <- "BIOCHEMICAL", # to be chosen by dropdown menu from column names
+      # file for rowData
+      file_feature <- file_data, # should be the same as data_file by default, with the option to select a different file
+      # data sheet
+      sheet_feature <- "metanno", # to be choosen by dropdown menu from available sheet names from file_feature
+      # id column
+      id_col_feature <- "BIOCHEMICAL", # to be chosen by dropdown menu from column names
+      # file for coData
+      file_sample <- file_data, # should be the same as data_file by default, with the option to select a different file
+      # data sheet
+      sheet_sample <- "sampleanno", # to be choosen by dropdown menu from available sheet names from file_feature
+      # id column
+      id_col_sample <- "SAMPLE_NAME", # to be chosen by dropdown menu from column names
+      ## Preprocessing ----
+      # maximal allowed missingness percentage per feature
+      filter_feat_max <- 0.5, # can be any number between 0 and 1. Can be left empty. Default 1.
+      # maximal allowed missingness percentage per sample
+      filter_sample_max <- 1, # can be any number between 0 and 1. Can be left empty. Default 1.
+      # color column for sample boxplot
+      sample_boxplot_col <- "Tissue",
+      # max missingness percentage per feature for normalization
+      feat_max_norm <- 0.2, # can be any number between 0 and 1. Can be left empty. Default 1.
+      # batch column
+      batch <- "Batch_RUN_DAY", # to be chosen by dropdown menu from colData columns. Can be left empty. Default NULL.
+      # columns for PCA/UMAP coloring
+      pca_cols <- c("Batch_RUN_DAY","Tissue","Gleason"), # to be chosen by dropdown menu from colData columns. Multiple choice possible. Default NULL.
+      # columns for heatmap annotations
+      heatmap_anno_col <- pca_cols, # to be chosen by dropdown menu from colData columns. Multiple choice possible. Default NULL.
+      heatmap_anno_row <- "SUPER_PATHWAY", # to be chosen by dropdown menu from rowData columns. Multiple choice possible. Default NULL.
+      ## Differential Analysis ----
+      # outcome
+      var="Gleason", # to be chosen by dropdown menu from colData columns.
+      # is the outcome binary?
+      binary=F,
+      # type of analysis
+      analysis_type="kendall", # to be chosen from dropdown menu between the following: c("lm","pearson","spearman","kendall"). Default "lm".
+      # method for multiple testing correction
+      mult_test_method="BH", # to be chosen from dropdown menu between the following: c("BH","bonferroni","BY"). Default "BH".
+      # significance threshold
+      alpha=0.05, # can be any number between 0 and 1. Default 0.05.
+      # column for pathway aggregation in barplot
+      group_col_barplot="SUB_PATHWAY", # to be chosen by dropdown menu from rowData columns.
+      # column for barplot colors
+      color_col_barplot="SUPER_PATHWAY", # to be chosen by dropdown menu from rowData columns. Can be left empty. Default NULL.
+      # Define Functions ----
+      diff_analysis_func <- function(D,
+                                     var,
+                                     binary=F,
+                                     analysis_type="lm",
+                                     mult_test_method="BH",
+                                     alpha=0.05,
+                                     group_col_barplot,
+                                     color_col_barplot=NULL){
+        D %<>%
+          mt_reporting_heading(heading = sprintf("%s Differential Analysis",var), lvl = 2) %>%
+          {.}
+        
+        if(analysis_type=="lm"){
+          D %<>%
+            mt_stats_univ_lm(formula = as.formula(sprintf("~  %s",var)), stat_name = sprintf("%s analysis",var)) %>%
+            {.}
+        }else{
+          D %<>%
+            mt_stats_univ_cor(in_col = var, stat_name = sprintf("%s analysis",var),method = analysis_type) %>%
+            {.}
+        }
+        
+        if(binary){
+          D %<>%
+            mt_post_fold_change(stat_name = sprintf("%s analysis",var))
+        }
+        D %<>%
+          mt_post_multtest(stat_name = sprintf("%s analysis",var), method = mult_test_method) %>%
+          mt_reporting_stats(stat_name = sprintf("%s analysis",var), stat_filter = p.adj < alpha) %>%
+          mt_plots_volcano(stat_name = sprintf("%s analysis",var),
+                           x = !!sym(ifelse(binary,"fc","statistic")),
+                           feat_filter = p.adj < alpha,
+                           color = p.adj < alpha) %>%
+          mt_plots_box_scatter(stat_name = sprintf("%s analysis",var),
+                               x = !!sym(var),
+                               plot_type = ifelse(binary,"box","scatter"),
+                               feat_filter = p.adj < alpha, 
+                               feat_sort = p.value,
+                               annotation = "{sprintf('P-value: %.2e', p.value)}\nP.adj: {sprintf('%.2e', p.adj)}") %>%
+          mt_plots_stats_pathway_bar(stat_list = sprintf("%s analysis",var),
+                                     y_scale = "count",
+                                     feat_filter = p.adj < alpha,
+                                     group_col = group_col_barplot,
+                                     color_col = color_col_barplot) %>%
+          {.}
+        
+        return(D)
+      },
+      # Loading Data ----
+      D <-
+        mt_load_xls(file=file_data, sheet=sheet_data, samples_in_row=sir, id_col=id_col_data) %>%
+        mt_anno_xls(file=file_feature, sheet=sheet_feature, anno_type="features", anno_id_col=id_col_feature, data_id_col = "name") %>%
+        mt_anno_xls(file=file_sample, sheet=sheet_sample, anno_type="samples", anno_id_col =id_col_sample, data_id_col ="sample") %>%
+        mt_reporting_data() %>%
+        {.}
+    )
+  })
 }
 
 # Run the application 

@@ -6,6 +6,7 @@ library(tidyverse)
 library(DT)
 library(plotly)
 library(shinyWidgets)
+library(RColorBrewer)
 
 
 
@@ -313,8 +314,7 @@ server <- function(input, output, session) {
                                        {c(input$mod2.stat,
                                           input$mod2.plot1,
                                           input$mod2.plot2,
-                                          input$mod2.plot3,
-                                          input$mod2.categorical)}
+                                          input$mod2.plot3)}
     )
     
     # Module 2: store reactive output plots
@@ -422,21 +422,27 @@ server <- function(input, output, session) {
         
         # draw the plot2
         plot <- data_vol %>%
-            ggplot(aes(x = statistic, y = p.value, color = !!sym(legend_name))) +
+            ggplot(aes(x = statistic, y = p.value, color = !!sym(legend_name), label = name)) +
             geom_point() +
             scale_y_continuous(trans = reverselog_trans(10),
                                breaks = scales::trans_breaks("log10", function(x) 10^x),
                                labels = scales::trans_format("log10", scales::math_format(10^.x))) +
             labs(y = "p-value") +
-            ggtitle(paste0(inputs[1]))
+            ggtitle(paste0(inputs[1])) +
+            scale_color_brewer(palette="Dark2")
         
         if (inputs[2] == "bar") {
             plot <- plot +
+                geom_point(size = 3)
                 ggtitle(paste0(sub_pathway_name, "-", inputs[1]))
         }
         
         session_store$mod2.vol <- ggplotly(plot, source = "sub_vol") %>%
-            layout(legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3))
+            layout(legend = list(orientation = 'h',
+                                 xanchor = "center",
+                                 x = 0.5,
+                                 y = -0.2,
+                                 title = list(text=paste0('<b> ', legend_name, ' </b>'))))
         session_store$mod2.vol
     })
     
@@ -577,7 +583,7 @@ server <- function(input, output, session) {
         data <- D %>%
             maplet:::mti_format_se_samplewise() %>%
             tidyr::gather(var, value, dplyr::one_of(rownames(D)))
-         
+        
         d.eq <- event_data("plotly_click", source = "sub_eq")
         d.vol <- event_data("plotly_click", source = "sub_vol")
         
@@ -623,7 +629,15 @@ server <- function(input, output, session) {
                     names <- unlist(row_data[row_data[pwvar] == sub_pathway_name,]$name)
                     data_vol <- data_vol[data_vol$name %in% names, ]
                 }
-                metabolite <- data_vol[as.numeric(d.vol$pointNumber) + 1,]$var[1]
+                # set the column curveNumber by color legend
+                p.adj.significant <- alpha
+                data_vol[, "curveNumber"] <- ifelse(data_vol$p.adj < as.numeric(p.adj.significant), 1, 0)
+                data_vol_true <- data_vol[data_vol$curveNumber==1, ]
+                data_vol_false <- data_vol[data_vol$curveNumber==0, ]
+                # By using click info (curveNumber & ponitNumber) to get the metabolite name
+                metabolite <- ifelse(d.vol$curveNumber == 1,
+                                     data_vol_true[d.vol$pointNumber + 1, ]$var[1],
+                                     data_vol_false[d.vol$pointNumber + 1, ]$var[1])
                 term <- data_vol$term[1]
                 
             }
@@ -633,7 +647,7 @@ server <- function(input, output, session) {
         data <- data[data$var == metabolite, ]
         
         # Treat as categorical or not?
-        if (inputs[5]) {
+        if (input$mod2.categorical) {
             data[, term] <- factor(data[, term])
         } else {
             data[, term] <- as.numeric(data[, term])
@@ -647,9 +661,9 @@ server <- function(input, output, session) {
                 ggtitle(metabolite)
         } else {
             plot <- data %>%
-                ggplot(aes(x = !!sym(term), y = var)) +
+                ggplot(aes(x = var, y = !!sym(term))) +
                 geom_boxplot() +
-                geom_jitter(width = 0.2) +
+                #geom_jitter(width = 0.2) +
                 ggtitle(metabolite)
         }
         
@@ -688,7 +702,8 @@ server <- function(input, output, session) {
                                   estimate = formatC(estimate, format = "E", digits = 2),
                                   std.error = formatC(std.error, format = "E", digits = 2)
                               ) %>%
-                              filter(var == input$mod4_metabolite)
+                              filter(var == input$mod4_metabolite) %>%
+                              rename("name" = var)
                       })
     
     # Module 4: output the stats table
@@ -702,7 +717,7 @@ server <- function(input, output, session) {
                       lengthMenu = c(10, 20, 50)
                   )
         )
-    })  
+    })
     
     # mod4； catch the selected row
     observe({
@@ -736,18 +751,25 @@ server <- function(input, output, session) {
         
         # Set the legend color column
         data_vol[, "isSelected"] <- ifelse(data_vol$var==isSelected, TRUE, FALSE)
+        highlight_point <- data_vol[data_vol$isSelected==TRUE, ]
         
         plot <- data_vol %>%
-            ggplot(aes(x = statistic, y = p.value, color = isSelected)) +
+            ggplot(aes(x = statistic, y = p.value, color = isSelected, label = name)) +
             geom_point() +
+            geom_point(data=highlight_point, size = 3) +
             scale_y_continuous(trans = reverselog_trans(10),
                                breaks = scales::trans_breaks("log10", function(x) 10^x),
                                labels = scales::trans_format("log10", scales::math_format(10^.x))) +
             labs(y = "p-value") +
-            ggtitle(paste0(stat_name_selected()))
+            ggtitle(paste0(stat_name_selected(), "-", isSelected)) +
+            scale_color_manual(values=c("#999999", "red"))
         
         session_store$mod4.vol <- ggplotly(plot, source = "mod4_sub_vol") %>%
-            layout(legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3))
+            layout(legend = list(orientation = 'h',
+                                 xanchor = "center",
+                                 x = 0.5,
+                                 y = -0.2,
+                                 title = list(text='<b> isSelected </b>')))
         session_store$mod4.vol
     })
     
@@ -803,7 +825,17 @@ server <- function(input, output, session) {
         
         if (!is.null(d)) {
             data_vol <- get_data_by_name(D, "stat_name", "volcano", stat_name_selected())
-            metabolite <- data_vol[as.numeric(d$pointNumber) + 1,]$var[1]
+            
+            # set the column curveNumber by color legend
+            isSelected <- input$mod4_metabolite
+            data_vol[, "curveNumber"] <- ifelse(data_vol$var==isSelected, 1, 0)
+            data_vol_true <- data_vol[data_vol$curveNumber==1, ]
+            data_vol_false <- data_vol[data_vol$curveNumber==0, ]
+            
+            # By using click info (curveNumber & ponitNumber) to get the metabolite name
+            metabolite <- ifelse(d$curveNumber == 1,
+                                 data_vol_true[d$pointNumber + 1, ]$var[1],
+                                 data_vol_false[d$pointNumber + 1, ]$var[1])
             term <- data_vol$term[1]
             
             # Filter the data by metabolite name
@@ -824,9 +856,9 @@ server <- function(input, output, session) {
                     ggtitle(metabolite)
             } else {
                 plot <- data %>%
-                    ggplot(aes(x = !!sym(term), y = var)) +
+                    ggplot(aes(x = var, y = !!sym(term))) +
                     geom_boxplot() +
-                    geom_jitter(width = 0.2) +
+                    #geom_jitter(width = 0.2) +
                     ggtitle(metabolite)
             }
         }

@@ -1580,7 +1580,7 @@ server <- function(input, output) {
   )
   
 # Define rendering logic of control widgets in Module 6 ----------------------
-  
+  # control widget of selecting file
   output$mod6_assay_sheet <- renderUI({
     req(input$file1)
     selectInput("assay_sheet", label = NULL,
@@ -1588,6 +1588,7 @@ server <- function(input, output) {
                 choices = getSheetNames(as.character(input$file1$datapath))
     )
   })
+  # control widget of dimensions
   df_assay <- reactive({
     read_excel(as.character(input$file1$datapath),
                col_names = input$header,
@@ -1619,7 +1620,7 @@ server <- function(input, output) {
                col_names = input$header,
                sheet=input$coldata_sheet)
   })
-  
+  # control widget of data loading
   output$mod6_assay_id_column <- renderUI({
     selectInput("assay_id_column", label = NULL,
                 width = "220px",
@@ -1640,7 +1641,7 @@ server <- function(input, output) {
                 choices = colnames(df_coldata())
     )
   })
-  
+  # control widget of preprocessing
   output$mod6_pre_sample_color_column <- renderUI({
     selectInput("pre_sample_color_column", label = NULL,
                 width = "220px",
@@ -1675,7 +1676,7 @@ server <- function(input, output) {
                 choices = colnames(df_rowdata())
     )
   })
-  
+  # control widget of differential analysis
   output$mod6_outcome <- renderUI({
     selectInput("outcome", label = NULL,
                 width = "220px",
@@ -1698,11 +1699,13 @@ server <- function(input, output) {
   })
   
 # Define rendering logic of outputs in Module 6 ------------------------------
+  # record the file path of selected file
   mod6_filepath <- 
     eventReactive(input$mod6_go, ## delayed output
                   {c(input$file1$datapath)
                   })
   
+  # print table when clicking "investigate" button
   observeEvent(input$mod6_go,{
     output$mod6_main_panel <- renderUI({
       list(dataTableOutput("mod6_assay"),
@@ -1713,25 +1716,29 @@ server <- function(input, output) {
     })
   })
   
+  # print log text when clicking "run" button
   observeEvent(input$mod6_go_load,{
     output$mod6_main_panel <- renderUI({
-      textOutput("log_load")
+      tagAppendAttributes(verbatimTextOutput("log_load"), 
+                          style="white-space:pre-wrap;")
     })
   })
   
   observeEvent(input$mod6_go_preprocess,{
     output$mod6_main_panel <- renderUI({
-      textOutput("log_preprocess")
+      tagAppendAttributes(verbatimTextOutput("log_preprocess"), 
+                          style="white-space:pre-wrap;")
     })
   })
   
   observeEvent(input$mod6_go_differ,{
     output$mod6_main_panel <- renderUI({
-      textOutput("log_differ")
+      tagAppendAttributes(verbatimTextOutput("log_differ"), 
+                          style="white-space:pre-wrap;")
     })
   })
   
-  
+  # render logic of the table
   output$mod6_assay <- renderDataTable({
     table <- read_excel(as.character(mod6_filepath()),
                         col_names = input$header,
@@ -1773,325 +1780,34 @@ server <- function(input, output) {
                 autoWidth = TRUE
               ))
   })
-  
-  # https://mastering-shiny.org/action-transfer.html
-  output$download_se <- downloadHandler(
-    filename = function() {
-      paste0("SE_", Sys.Date(), ".Rdata")
-    },
-    content = function(fname) {
-      ## Loading Data ----
-      # file for assay
-      file_data <- "Module6_Data.xlsx"
-      # data sheet
-      sheet_data <- "data" # to be choosen by dropdown menu displaying available sheet names from file_data
-      # samples in rows?
-      sir <- F # checkbox for T/F values
-      # id column
-      id_col_data <- "BIOCHEMICAL" # to be chosen by dropdown menu from column names
-      # file for rowData
-      file_feature <- file_data # should be the same as data_file by default, with the option to select a different file
-      # data sheet
-      sheet_feature <- "metanno" # to be choosen by dropdown menu from available sheet names from file_feature
-      # id column
-      id_col_feature <- "BIOCHEMICAL" # to be chosen by dropdown menu from column names
-      # file for coData
-      file_sample <- file_data # should be the same as data_file by default, with the option to select a different file
-      # data sheet
-      sheet_sample <- "sampleanno" # to be choosen by dropdown menu from available sheet names from file_feature
-      # id column
-      id_col_sample <- "SAMPLE_NAME" # to be chosen by dropdown menu from column names
-      ## Preprocessing ----
-      # maximal allowed missingness percentage per feature
-      filter_feat_max <- 0.5 # can be any number between 0 and 1. Can be left empty. Default 1.
-      # maximal allowed missingness percentage per sample
-      filter_sample_max <- 1 # can be any number between 0 and 1. Can be left empty. Default 1.
-      # color column for sample boxplot
-      sample_boxplot_col <- "Tissue"
-      # max missingness percentage per feature for normalization
-      feat_max_norm <- 0.2 # can be any number between 0 and 1. Can be left empty. Default 1.
-      # batch column
-      batch <- "Batch_RUN_DAY" # to be chosen by dropdown menu from colData columns. Can be left empty. Default NULL.
-      # columns for PCA/UMAP coloring
-      pca_cols <- c("Batch_RUN_DAY","Tissue","Gleason") # to be chosen by dropdown menu from colData columns. Multiple choice possible. Default NULL.
-      # columns for heatmap annotations
-      heatmap_anno_col <- pca_cols # to be chosen by dropdown menu from colData columns. Multiple choice possible. Default NULL.
-      heatmap_anno_row <- "SUPER_PATHWAY" # to be chosen by dropdown menu from rowData columns. Multiple choice possible. Default NULL.
-      ## Differential Analysis ----
-      # outcome
-      var="Gleason" # to be chosen by dropdown menu from colData columns.
-      # is the outcome binary?
-      binary=F 
-      # type of analysis
-      analysis_type="kendall" # to be chosen from dropdown menu between the following: c("lm","pearson","spearman","kendall"). Default "lm".
-      # method for multiple testing correction
-      mult_test_method="BH" # to be chosen from dropdown menu between the following: c("BH","bonferroni","BY"). Default "BH".
-      # significance threshold
-      alpha=0.05 # can be any number between 0 and 1. Default 0.05.
-      # column for pathway aggregation in barplot
-      group_col_barplot="SUB_PATHWAY" # to be chosen by dropdown menu from rowData columns.
-      # column for barplot colors
-      color_col_barplot="SUPER_PATHWAY" # to be chosen by dropdown menu from rowData columns. Can be left empty. Default NULL.
-      # Define Functions ----
-      diff_analysis_func <- function(D,
-                                     var,
-                                     binary=F,
-                                     analysis_type="lm",
-                                     mult_test_method="BH",
-                                     alpha=0.05,
-                                     group_col_barplot,
-                                     color_col_barplot=NULL){
-        D %<>%
-          mt_reporting_heading(heading = sprintf("%s Differential Analysis",var), lvl = 2) %>%
-          {.}
-        
-        if(analysis_type=="lm"){
-          D %<>%
-            mt_stats_univ_lm(formula = as.formula(sprintf("~  %s",var)), stat_name = sprintf("%s analysis",var)) %>%
-            {.}
-        }else{
-          D %<>%
-            mt_stats_univ_cor(in_col = var, stat_name = sprintf("%s analysis",var),method = analysis_type) %>%
-            {.}
-        }
-        
-        if(binary){
-          D %<>%
-            mt_post_fold_change(stat_name = sprintf("%s analysis",var))
-        }
-        D %<>%
-          mt_post_multtest(stat_name = sprintf("%s analysis",var), method = mult_test_method) %>%
-          mt_reporting_stats(stat_name = sprintf("%s analysis",var), stat_filter = p.adj < alpha) %>%
-          mt_plots_volcano(stat_name = sprintf("%s analysis",var),
-                           x = !!sym(ifelse(binary,"fc","statistic")),
-                           feat_filter = p.adj < alpha,
-                           color = p.adj < alpha) %>%
-          mt_plots_box_scatter(stat_name = sprintf("%s analysis",var),
-                               x = !!sym(var),
-                               plot_type = ifelse(binary,"box","scatter"),
-                               feat_filter = p.adj < alpha, 
-                               feat_sort = p.value,
-                               annotation = "{sprintf('P-value: %.2e', p.value)}\nP.adj: {sprintf('%.2e', p.adj)}") %>%
-          mt_plots_stats_pathway_bar(stat_list = sprintf("%s analysis",var),
-                                     y_scale = "count",
-                                     feat_filter = p.adj < alpha,
-                                     group_col = group_col_barplot,
-                                     color_col = color_col_barplot) %>%
-          {.}
-        
-        return(D)
-      }
-      # Loading Data ----
-      D <-
-        mt_load_xls(file=file_data, sheet=sheet_data, samples_in_row=sir, id_col=id_col_data) %>%
-        mt_anno_xls(file=file_feature, sheet=sheet_feature, anno_type="features", anno_id_col=id_col_feature, data_id_col = "name") %>%
-        mt_anno_xls(file=file_sample, sheet=sheet_sample, anno_type="samples", anno_id_col =id_col_sample, data_id_col ="sample") %>%
-        mt_reporting_data() %>%
-        {.}
-      # Preprocessing ----
-      D <- D %>%  
-        mt_reporting_heading(heading = "Preprocessing", lvl=1) %>%
-        
-        mt_reporting_heading(heading = "Filtering", lvl = 2) %>%
-        mt_plots_missingness(feat_max=filter_feat_max,samp_max = filter_sample_max) %>%
-        mt_pre_filter_missingness(feat_max = filter_feat_max, samp_max = filter_sample_max) %>%
-        mt_plots_missingness(feat_max=filter_feat_max, samp_max = filter_sample_max) %>%
-        mt_anno_missingness(anno_type = "samples", out_col = "missing") %>%
-        mt_anno_missingness(anno_type = "features", out_col = "missing") %>%
-        
-        mt_reporting_heading(heading = "Normalization", lvl = 2) %>%
-        mt_plots_sample_boxplot(color=!!sym(sample_boxplot_col), title = "Original", plot_logged = T) %>%
-        {.}
-      if(!is.null(batch)){
-        D %<>%
-          mt_pre_batch_median(batch_col = batch)
-      }
-      D <- D %>%
-        mt_plots_sample_boxplot(color=!!sym(sample_boxplot_col), title = "After batch correction", plot_logged = T) %>%
-        mt_pre_norm_quot(feat_max = feat_max_norm) %>%
-        mt_plots_dilution_factor(in_col=sample_boxplot_col) %>%
-        mt_plots_sample_boxplot(color=!!sym(sample_boxplot_col), title = "After normalization", plot_logged = T) %>%
-        mt_pre_trans_log() %>%
-        mt_pre_impute_knn() %>%
-        mt_plots_sample_boxplot(color=!!sym(sample_boxplot_col), title = "After imputation", plot_logged = T) %>%
-        mt_pre_outlier_detection_univariate() %>%
-        mt_reporting_data() %>%
-        
-        # mt_reporting_heading(heading = "Get Pathway Annotations", lvl = 1) %>%
-        # mt_anno_hmdb_to_kegg(in_col = "HMDb", out_col = "KEGG_ids") %>%
-        # mt_anno_pathways_hmdb(in_col = "HMDb", out_col = "pathway", pwdb_name = "KEGG") %>%
-        # mt_anno_pathways_remove_redundant(feat_col = "KEGG_ids", pw_col = "pathway") %>%
-        
-        mt_reporting_heading(heading = "Global Statistics", lvl = 1) %>%
-        {.}
-      # add PCA/UMAP plots
-      lapply(pca_cols, function(x){
-        D <<- D %>%
-          mt_plots_pca(scale_data = T, title = sprintf("scaled PCA - %s",x), color=!!sym(x), size=2.5, ggadd=scale_size_identity()) %>%
-          mt_plots_umap(scale_data = T, title = sprintf("scaled UMAP - %s",x), color=!!sym(x), size=2.5, ggadd=scale_size_identity()) %>%
-          {.}
-      }) %>% invisible
-      # add heatmap
-      D %<>%
-        mt_plots_heatmap(scale_data = T, annotation_col = heatmap_anno_col, annotation_row = heatmap_anno_row,
-                         clustering_method = "ward.D2", fontsize = 5, cutree_rows = 3, cutree_cols = 3, color=gplots::bluered(101)) %>%
-        {.}
-      # Differential analysis ----
-      D %<>%
-        mt_reporting_heading(heading = "Statistical Analysis", lvl = 1) %>%
-        
-        diff_analysis_func(var=var,binary=binary,analysis_type=analysis_type, mult_test_method=mult_test_method,alpha=alpha,
-                           group_col_barplot=group_col_barplot,color_col_barplot=color_col_barplot) %>%
-        {.}
-      # write Rdata to local
-      save(D, file=fname)
-    }
-  )
-  
+
+  # render logic of the log text of data loading
   output$log_load <- renderText({
     capture.output(
-      # set working directory to source file location
+      ## loading
       setwd(dirname(rstudioapi::getActiveDocumentContext()$path)),
-      # Reactive arguments ----
-      ## Loading Data ----
-      # file for assay
-      file_data <- "Module6_Data.xlsx",
-      # data sheet
-      sheet_data <- "data", 
-      # samples in rows?
-      sir <- F, 
-      # id column
-      id_col_data <- "BIOCHEMICAL", 
-      # file for rowData
-      file_feature <- file_data, 
-      # data sheet
-      sheet_feature <- "metanno", 
-      # id column
-      id_col_feature <- "BIOCHEMICAL", 
-      # file for coData
-      file_sample <- file_data, 
-      # data sheet
-      sheet_sample <- "sampleanno", 
-      # id column
-      id_col_sample <- "SAMPLE_NAME" 
-    )
-  })
-  
-  output$log_preprocess <- renderText({
-    capture.output(
-      # set working directory to source file location
-      setwd(dirname(rstudioapi::getActiveDocumentContext()$path)),
-      # Reactive arguments ----
-      ## Loading Data ----
-      # file for assay
-      file_data <- "Module6_Data.xlsx",
-      # data sheet
-      sheet_data <- "data", # to be choosen by dropdown menu displaying available sheet names from file_data
-      # samples in rows?
-      sir <- F, # checkbox for T/F values
-      # id column
-      id_col_data <- "BIOCHEMICAL", # to be chosen by dropdown menu from column names
-      # file for rowData
-      file_feature <- file_data, # should be the same as data_file by default, with the option to select a different file
-      # data sheet
-      sheet_feature <- "metanno", # to be choosen by dropdown menu from available sheet names from file_feature
-      # id column
-      id_col_feature <- "BIOCHEMICAL", # to be chosen by dropdown menu from column names
-      # file for coData
-      file_sample <- file_data, # should be the same as data_file by default, with the option to select a different file
-      # data sheet
-      sheet_sample <- "sampleanno", # to be choosen by dropdown menu from available sheet names from file_feature
-      # id column
-      id_col_sample <- "SAMPLE_NAME", # to be chosen by dropdown menu from column names
-      ## Preprocessing ----
-      # maximal allowed missingness percentage per feature
-      filter_feat_max <- 0.5, # can be any number between 0 and 1. Can be left empty. Default 1.
-      # maximal allowed missingness percentage per sample
-      filter_sample_max <- 1, # can be any number between 0 and 1. Can be left empty. Default 1.
-      # color column for sample boxplot
-      sample_boxplot_col <- "Tissue",
-      # max missingness percentage per feature for normalization
-      feat_max_norm <- 0.2, # can be any number between 0 and 1. Can be left empty. Default 1.
-      # batch column
-      batch <- "Batch_RUN_DAY", # to be chosen by dropdown menu from colData columns. Can be left empty. Default NULL.
-      # columns for PCA/UMAP coloring
-      pca_cols <- c("Batch_RUN_DAY","Tissue","Gleason"), # to be chosen by dropdown menu from colData columns. Multiple choice possible. Default NULL.
-      # columns for heatmap annotations
-      heatmap_anno_col <- pca_cols, # to be chosen by dropdown menu from colData columns. Multiple choice possible. Default NULL.
-      heatmap_anno_row <- "SUPER_PATHWAY", # to be chosen by dropdown menu from rowData columns. Multiple choice possible. Default NULL.
-      ## Differential Analysis ----
-      # outcome
-      var="Gleason", # to be chosen by dropdown menu from colData columns.
-      # is the outcome binary?
-      binary=F,
-      # type of analysis
-      analysis_type="kendall", # to be chosen from dropdown menu between the following: c("lm","pearson","spearman","kendall"). Default "lm".
-      # method for multiple testing correction
-      mult_test_method="BH", # to be chosen from dropdown menu between the following: c("BH","bonferroni","BY"). Default "BH".
-      # significance threshold
-      alpha=0.05, # can be any number between 0 and 1. Default 0.05.
-      # column for pathway aggregation in barplot
-      group_col_barplot="SUB_PATHWAY", # to be chosen by dropdown menu from rowData columns.
-      # column for barplot colors
-      color_col_barplot="SUPER_PATHWAY", # to be chosen by dropdown menu from rowData columns. Can be left empty. Default NULL.
-      # Define Functions ----
-      diff_analysis_func <- function(D,
-                                     var,
-                                     binary=F,
-                                     analysis_type="lm",
-                                     mult_test_method="BH",
-                                     alpha=0.05,
-                                     group_col_barplot,
-                                     color_col_barplot=NULL){
-        D %<>%
-          mt_reporting_heading(heading = sprintf("%s Differential Analysis",var), lvl = 2) %>%
-          {.}
-        
-        if(analysis_type=="lm"){
-          D %<>%
-            mt_stats_univ_lm(formula = as.formula(sprintf("~  %s",var)), stat_name = sprintf("%s analysis",var)) %>%
-            {.}
-        }else{
-          D %<>%
-            mt_stats_univ_cor(in_col = var, stat_name = sprintf("%s analysis",var),method = analysis_type) %>%
-            {.}
-        }
-        
-        if(binary){
-          D %<>%
-            mt_post_fold_change(stat_name = sprintf("%s analysis",var))
-        }
-        D %<>%
-          mt_post_multtest(stat_name = sprintf("%s analysis",var), method = mult_test_method) %>%
-          mt_reporting_stats(stat_name = sprintf("%s analysis",var), stat_filter = p.adj < alpha) %>%
-          mt_plots_volcano(stat_name = sprintf("%s analysis",var),
-                           x = !!sym(ifelse(binary,"fc","statistic")),
-                           feat_filter = p.adj < alpha,
-                           color = p.adj < alpha) %>%
-          mt_plots_box_scatter(stat_name = sprintf("%s analysis",var),
-                               x = !!sym(var),
-                               plot_type = ifelse(binary,"box","scatter"),
-                               feat_filter = p.adj < alpha, 
-                               feat_sort = p.value,
-                               annotation = "{sprintf('P-value: %.2e', p.value)}\nP.adj: {sprintf('%.2e', p.adj)}") %>%
-          mt_plots_stats_pathway_bar(stat_list = sprintf("%s analysis",var),
-                                     y_scale = "count",
-                                     feat_filter = p.adj < alpha,
-                                     group_col = group_col_barplot,
-                                     color_col = color_col_barplot) %>%
-          {.}
-        
-        return(D)
-      },
-      # Loading Data ----
+      file_data <- as.character(input$file1$datapath),
       D <-
-        mt_load_xls(file=file_data, sheet=sheet_data, samples_in_row=sir, id_col=id_col_data) %>%
-        mt_anno_xls(file=file_feature, sheet=sheet_feature, anno_type="features", anno_id_col=id_col_feature, data_id_col = "name") %>%
-        mt_anno_xls(file=file_sample, sheet=sheet_sample, anno_type="samples", anno_id_col =id_col_sample, data_id_col ="sample") %>%
+        mt_load_xls(file=file_data, 
+                    sheet=input$assay_sheet, 
+                    samples_in_row=input$mod6_assay_in_row, 
+                    id_col=input$assay_id_column) %>%
+        mt_anno_xls(file=file_data, 
+                    sheet=input$rowdata_sheet,
+                    anno_type="features", 
+                    anno_id_col=input$rowdata_id_column, 
+                    data_id_col = "name") %>%
+        mt_anno_xls(file=file_data, 
+                    sheet=input$coldata_sheet, 
+                    anno_type="samples", 
+                    anno_id_col =input$coldata_id_column, 
+                    data_id_col ="sample") %>%
         mt_reporting_data() %>%
         {.}
     )
   })
+  
+
 }
 
 # Run the application 

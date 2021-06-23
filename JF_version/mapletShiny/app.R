@@ -83,7 +83,7 @@ x[[grep("plots_box_scatter", names(x), value = T)[2]]]$output[[1]] %>%
 
 ui <- fluidPage(
   
-# set appearance customization -------------------------------------------------
+  # set appearance customization -------------------------------------------------
   
   theme = "bootstrap.css",
   includeCSS("www/style.css"),
@@ -112,7 +112,7 @@ ui <- fluidPage(
     # sticky tabs while scrolling main panel
     position = c("fixed-top"), 
     
-# Define layout of Module 1 ----------------------------------------------------
+    # Define layout of Module 1 ----------------------------------------------------
     
     tabPanel("Module 1", 
              sidebarLayout(
@@ -120,7 +120,7 @@ ui <- fluidPage(
                             # sidebar auto-scrolling with main panel
                             style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
                             tags$p(
-                              HTML("<b>Module 1</b> requires extracting all the result objects one at a time."
+                              HTML("<b>Module 1</b> extracts all the result objects one at a time."
                               )),
                             tags$p(
                               HTML("Users can assess results in a drop-down menu that offers a list of a stat_name and a plot type (e.g. “missingness”, “pval”)."
@@ -139,13 +139,9 @@ ui <- fluidPage(
                             # define one UI object to select output type
                             uiOutput("mod1_select_object_ui"),
                             br(),   
-                            # how many bar plots to render
-                            uiOutput("mod1_box_plot_num_ui"),
-                            br(),
                             tags$p(
-                              HTML("<b>Hint:<br></b>Outputs are delayed untill you click 'UPDATE' button after selection."
+                              HTML("<b>Hint:<br></b>Outputs are delayed untill you click 'UPDATE' button after selection. Some plots such as box plot or multiple plots may cost dozens of seconds to show up."
                               )),
-                            br(),
                             # delay the output
                             actionButton("mod1_go", "Update")
                ), 
@@ -161,7 +157,7 @@ ui <- fluidPage(
              )
     ), 
     
-# Define layout of Module 2 ----------------------------------------------------
+    # Define layout of Module 2 ----------------------------------------------------
     
     tabPanel("Module 2",
              sidebarLayout(
@@ -203,7 +199,7 @@ ui <- fluidPage(
                                   "Volcano" = "volcano"),
                    selected  = "volcano"
                  ),
-                 br(),
+                 tags$hr(),
                  radioButtons(
                    "mod2.plot3",
                    "Select plot3 type:",
@@ -211,12 +207,14 @@ ui <- fluidPage(
                                   "Scatter" = "scatter"),
                    selected  = "scatter"
                  ),
-                 br(),
                  checkboxInput("mod2.categorical", 
                                "Treat as categorical", 
                                value = FALSE
                  ),
-                 br(),
+                 tags$hr(),
+                 tags$p(
+                   HTML("<b>Hint:<br></b>Outputs are delayed untill you click 'UPDATE' button after selection."
+                   )),
                  actionButton("mod2_go", "Update")
                ),
                mainPanel(
@@ -237,7 +235,7 @@ ui <- fluidPage(
                )
              )), 
     
-# Define layout of Module 3 ----------------------------------------------------
+    # Define layout of Module 3 ----------------------------------------------------
     
     tabPanel("Module 3", 
              sidebarLayout(
@@ -245,7 +243,7 @@ ui <- fluidPage(
                             # sidebar autoscroll with main panel
                             style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
                             tags$p(
-                              HTML("<b>Module 3</b> requires generating an interactive 2D projection of PCA/UMAP."
+                              HTML("<b>Module 3</b> generates an interactive 2D projection of PCA/UMAP."
                               )),
                             tags$p(
                               HTML("It displays a drop-down menu of all colData columns for coloring."
@@ -279,7 +277,7 @@ ui <- fluidPage(
              )
     ),
     
-# Define layout of Module 4 --------------------------------------------------
+    # Define layout of Module 4 --------------------------------------------------
     
     # Module 4
     tabPanel("Module 4",
@@ -290,7 +288,7 @@ ui <- fluidPage(
                  style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
                  tags$p(
                    HTML(
-                     "<b>Module 4</b> requires collection on all statistical results in a table given one metabolite name."
+                     "<b>Module 4</b> collects all statistical results in a table given one metabolite name."
                    )
                  ),
                  tags$p(
@@ -311,6 +309,10 @@ ui <- fluidPage(
                                "Treat as categorical", 
                                value = FALSE
                  ),
+                 br(),
+                 tags$p(
+                   HTML("<b>Hint:<br></b>Outputs are delayed untill you click 'UPDATE' button after selection."
+                   )),
                  br(),
                  # delay the output
                  actionButton("mod4_go", "Update")
@@ -335,14 +337,14 @@ ui <- fluidPage(
                )
              )), 
     
-# Define layout of Module 5 ----------------------------------------------------
+    # Define layout of Module 5 ----------------------------------------------------
     tabPanel("Module 5", 
              sidebarLayout(
                sidebarPanel(id = "mod5_panel1",
                             # sidebar autoscroll with main panel
                             style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
                             tags$p(
-                              HTML("<b>Module 5</b> requires creating tables, distribution plots, or other graphics to explore the SE object."
+                              HTML("<b>Module 5</b> creates tables, distribution plots, or other graphics to explore the SE object."
                               )),
                             radioButtons("mod5_dimension", "Select one dimension:", 
                                          choices = list("Column Data" = "col", 
@@ -350,6 +352,10 @@ ui <- fluidPage(
                             ),
                             br(),
                             uiOutput("mod5_dimension_ui"),
+                            br(),
+                            tags$p(
+                              HTML("<b>Hint:<br></b>Outputs are delayed untill you click 'UPDATE' button after selection."
+                              )),
                             br(),
                             # delay the output
                             actionButton("mod5_go", "Update")
@@ -363,7 +369,7 @@ ui <- fluidPage(
                )
              )
     ),
-# Define layout of Module 6 ----------------------------------------------------
+    # Define layout of Module 6 ----------------------------------------------------
     tabPanel("Module 6", 
              # Sidebar layout with input and output definitions ----
              dashboardPage(
@@ -375,10 +381,13 @@ ui <- fluidPage(
                    sidebarPanel(
                      id = "mod6_panel1",
                      style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; width: 80%; ",
+                     tags$p(
+                       HTML("<b>Module 6</b> starts with original data, creates a pipeline and download it to local."
+                       )),
                      # Input: Select a file ----
                      fileInput("file1", "Uploading File",
                                multiple = FALSE,
-                               accept = c(".xlsx", ".Rdata"),
+                               accept = c(".xlsx"),
                                width = "300px"),
                      # Input: Checkbox if file has header ----
                      checkboxInput("header", "Header", TRUE),
@@ -407,7 +416,7 @@ ui <- fluidPage(
                          uiOutput("mod6_rowdata_id_column"),
                          tags$p(HTML("ID column in colData:")),
                          uiOutput("mod6_coldata_id_column"),
-                         actionButton("mod6_go_load", "Run")
+                         actionButton("mod6_go_load", "Run",width = "220px")
                      ),
                      
                      tags$hr(),
@@ -416,14 +425,14 @@ ui <- fluidPage(
                          title="Preprocessing", width = "350px",
                          tags$p(HTML("Max % missingness per feature:")),
                          numericInput("mod6_filter_feat_max", label = NULL,
-                                      value = .5,
+                                      value = 1,
                                       min = 0,
                                       max = 1,
                                       step = 0.1,
                                       width = "220px"),
                          tags$p(HTML("Max % missingness per feature (normalization):")),
                          numericInput("mod6_feat_max_norm", label = NULL,
-                                      value = .2,
+                                      value = 1,
                                       min = 0,
                                       max = 1,
                                       step = 0.1,
@@ -445,7 +454,8 @@ ui <- fluidPage(
                          uiOutput("mod6_pre_heatmap_anno_column"),
                          tags$p(HTML("Heatmap annotation row:")),
                          uiOutput("mod6_pre_heatmap_anno_row"),
-                         actionButton("mod6_go_preprocess", "Run")
+                         tags$p(HTML("The log text may cost dozens of seconds to print.")),
+                         actionButton("mod6_go_preprocess", "Run",width = "220px")
                      ),
                      
                      tags$hr(),
@@ -476,7 +486,8 @@ ui <- fluidPage(
                          uiOutput("mod6_group_col_barplot"),
                          tags$p(HTML("Barplot coloring column:")),
                          uiOutput("mod6_color_col_barplot"),
-                         actionButton("mod6_go_differ", "Run")
+                         tags$p(HTML("The log text may cost dozens of seconds to print.")),
+                         actionButton("mod6_go_differ", "Run",width = "220px")
                      )
                    ),
                    
@@ -488,6 +499,7 @@ ui <- fluidPage(
                      br(), 
                      br(), 
                      # Output: Data file ----
+                     tags$p(HTML("Downloading SE.Rdata may cost more than one minute. Please wait for the prompt.")),
                      downloadButton("download_se", "Download result SE .Rdata"),
                      br(),
                      br(),
@@ -509,7 +521,7 @@ ui <- fluidPage(
 
 server <- function(input, output) {
   
-# Define rendering logic of control widgets in Module 1 ------------------------
+  # Define rendering logic of control widgets in Module 1 ------------------------
   
   # create stat_name list dependent on radio button
   output$mod1_select_statname_ui <- renderUI({
@@ -556,31 +568,14 @@ server <- function(input, output) {
     }
   })
   
-  ## create dynamic choices of number of box plots to render 
-  output$mod1_box_plot_num_ui <- renderUI({
-    # assign an object of all box plots
-    plot_box <- mtm_res_get_entries(D, c("plots", "box"))
-    
-    switch(
-      box_switch(),
-      "box_plot"=list(selectInput("mod1_box_plot_num", 
-                                  "Number of top box plots:", 
-                                  choices = 1:(plot_box[[as.numeric(ord())]]$output2),
-                                  width = "220px")
-      ),
-      "non_box_plot"=NULL
-    )
-  })
-  
   # create reactive inputs list
   mod1_input_object <- eventReactive(input$mod1_go, ## delayed output
                                      {c(input$mod1_radio,
                                         input$mod1_select_statname,
-                                        input$mod1_select_object,
-                                        input$mod1_box_plot_num)}
+                                        input$mod1_select_object)}
   )
   
-# Define rendering logic of outputs in Module 1 --------------------------------
+  # Define rendering logic of outputs in Module 1 --------------------------------
   
   # Insert the right number of plot output objects into UI
   output$mod1_output_plot <- renderUI({
@@ -605,7 +600,7 @@ server <- function(input, output) {
       row_n <- ceiling(i/len_j)
       ## set dynamic height of box scatter plots based on output2
       height <- if(plots[[1]]$fun[2]=="box"&plots[[1]]$fun[3]=="scatter"&!is.null(plots[[row_n]]$output2)){
-        as.numeric(mod1_input_object()[4])*150
+        as.numeric(plots[[row_n]]$output2)*150
       } else {
         560
       }
@@ -618,7 +613,14 @@ server <- function(input, output) {
   
   # Call renderPlot for each one. Plots are only actually generated when they
   # are visible on the web page.
-  for (i in 1:5) {
+    # get the max number of objects
+  num_df <- subset(obj_name, V1=="plots")
+  num_df <- num_df %>%
+    dplyr::group_by(V2, stat_name) %>%
+    dplyr::summarise(cnt_sum=sum(cnt))
+  max_plot <- max(num_df$cnt_sum)
+  
+  for (i in 1:max_plot) {
     # Need local so that each item gets its own number. Without it, the value
     # of i in the renderPlot() will be the same across all instances, because
     # of when the expression is evaluated.
@@ -664,10 +666,10 @@ server <- function(input, output) {
         dplyr::select(name, statistic, p.value, p.adj, term, dplyr::everything()) %>%
         ## scientific notation
         dplyr::mutate(statistic=formatC(statistic, format = "E", digits = 2),
-               p.value=formatC(p.value, format = "E", digits = 2),
-               p.adj=formatC(p.adj, format = "E", digits = 2),
-               estimate=formatC(estimate, format = "E", digits = 2),
-               std.error=formatC(std.error, format = "E", digits = 2)
+                      p.value=formatC(p.value, format = "E", digits = 2),
+                      p.adj=formatC(p.adj, format = "E", digits = 2),
+                      estimate=formatC(estimate, format = "E", digits = 2),
+                      std.error=formatC(std.error, format = "E", digits = 2)
         )
     } else {
       table %>%
@@ -693,7 +695,7 @@ server <- function(input, output) {
     )
   })
   
-# Define rendering logic of outputs in Module 2 --------------------------------
+  # Define rendering logic of outputs in Module 2 --------------------------------
   # Module 2: create reactive inputs list
   mod2_input_object <- eventReactive(input$mod2_go, 
                                      {c(input$mod2.stat,
@@ -1067,7 +1069,7 @@ server <- function(input, output) {
     }
   )
   
-# Define rendering logic of control widgets in Module 3 ------------------------
+  # Define rendering logic of control widgets in Module 3 ------------------------
   output$mod3_pca_data <- renderUI({
     if(input$mod3_select_plot=="pca"){
       selectInput("mod3_pca_data_type", "Select data type for PCA:",
@@ -1182,7 +1184,7 @@ server <- function(input, output) {
                                         input$mod3_umap_n_neighbors)}
   )
   
-# Define rendering logic of outputs in Module 3 --------------------------------
+  # Define rendering logic of outputs in Module 3 --------------------------------
   
   # render pca/umap of mod3
   output$mod3_plot <- renderPlotly({
@@ -1216,7 +1218,7 @@ server <- function(input, output) {
     }
   )
   
-# Define rendering logic of outputs in Module 4 --------------------------------
+  # Define rendering logic of outputs in Module 4 --------------------------------
   
   # Module 4: general reactive stats table
   mod4_metabolite_table <-
@@ -1417,7 +1419,7 @@ server <- function(input, output) {
     }
   )
   
-# Define rendering logic of control widgets in Module 5 ----------------------
+  # Define rendering logic of control widgets in Module 5 ----------------------
   output$mod5_dimension_ui <- renderUI({
     switch(input$mod5_dimension,
            "col"=list(selectInput("mod5_var1_select", 
@@ -1428,6 +1430,7 @@ server <- function(input, output) {
                       checkboxInput("mod5_var1_type", 
                                     "Continuous", 
                                     value = TRUE),
+                      tags$hr(),
                       selectInput("mod5_var2_select", 
                                   "Select the secondary variable:", 
                                   choices = names(colData(D)),
@@ -1436,6 +1439,7 @@ server <- function(input, output) {
                       checkboxInput("mod5_var2_type", 
                                     "Continuous", 
                                     value = TRUE),
+                      tags$hr(),
                       selectInput("mod5_select_hover", 
                                   "Select hovering text:", 
                                   choices = names(colData(D)),
@@ -1469,7 +1473,7 @@ server <- function(input, output) {
     )
   })
   
-# Define rendering logic of outputs in Module 5 ------------------------------
+  # Define rendering logic of outputs in Module 5 ------------------------------
   mod5_input <- eventReactive(input$mod5_go,{
     c(input$mod5_var1_select,
       input$mod5_var1_type,
@@ -1579,7 +1583,7 @@ server <- function(input, output) {
     }
   )
   
-# Define rendering logic of control widgets in Module 6 ----------------------
+  # Define rendering logic of control widgets in Module 6 ----------------------
   # control widget of selecting file
   output$mod6_assay_sheet <- renderUI({
     req(input$file1)
@@ -1652,6 +1656,7 @@ server <- function(input, output) {
   output$mod6_pre_batch_column <- renderUI({
     selectInput("pre_batch_column", label = NULL,
                 width = "220px",
+                selected=NULL,
                 choices = colnames(df_coldata())
     )
   })
@@ -1659,6 +1664,8 @@ server <- function(input, output) {
   output$mod6_pre_pca_color_column <- renderUI({
     selectInput("pre_pca_color_column", label = NULL,
                 width = "220px",
+                multiple=TRUE,
+                selected=NULL,
                 choices = colnames(df_coldata())
     )
   })
@@ -1666,6 +1673,8 @@ server <- function(input, output) {
   output$mod6_pre_heatmap_anno_column <- renderUI({
     selectInput("pre_heatmap_anno_column", label = NULL,
                 width = "220px",
+                multiple=TRUE,
+                selected=NULL,
                 choices = colnames(df_coldata())
     )
   })
@@ -1673,6 +1682,8 @@ server <- function(input, output) {
   output$mod6_pre_heatmap_anno_row <- renderUI({
     selectInput("pre_heatmap_anno_row", label = NULL,
                 width = "220px",
+                multiple=TRUE,
+                selected=NULL,
                 choices = colnames(df_rowdata())
     )
   })
@@ -1687,6 +1698,7 @@ server <- function(input, output) {
   output$mod6_group_col_barplot <- renderUI({
     selectInput("group_col_barplot", label = NULL,
                 width = "220px",
+                selected=NULL,
                 choices = colnames(df_rowdata())
     )
   })
@@ -1694,11 +1706,12 @@ server <- function(input, output) {
   output$mod6_color_col_barplot <- renderUI({
     selectInput("color_col_barplot", label = NULL,
                 width = "220px",
+                selected=NULL,
                 choices = colnames(df_rowdata())
     )
   })
   
-# Define rendering logic of outputs in Module 6 ------------------------------
+  # Define rendering logic of outputs in Module 6 ------------------------------
   # record the file path of selected file
   mod6_filepath <- 
     eventReactive(input$mod6_go, ## delayed output
@@ -1780,12 +1793,11 @@ server <- function(input, output) {
                 autoWidth = TRUE
               ))
   })
-
+  
   # render logic of the log text of data loading
   output$log_load <- renderText({
     capture.output(
       ## loading
-      setwd(dirname(rstudioapi::getActiveDocumentContext()$path)),
       file_data <- as.character(input$file1$datapath),
       D <-
         mt_load_xls(file=file_data, 
@@ -1807,7 +1819,224 @@ server <- function(input, output) {
     )
   })
   
-
+  # render logic of the log text of preprocessing
+  output$log_preprocess <- renderText({
+    capture.output(
+      ## loading
+      file_data <- as.character(input$file1$datapath),
+      D <-
+        mt_load_xls(file=file_data, 
+                    sheet=input$assay_sheet, 
+                    samples_in_row=input$mod6_assay_in_row, 
+                    id_col=input$assay_id_column) %>%
+        mt_anno_xls(file=file_data, 
+                    sheet=input$rowdata_sheet,
+                    anno_type="features", 
+                    anno_id_col=input$rowdata_id_column, 
+                    data_id_col = "name") %>%
+        mt_anno_xls(file=file_data, 
+                    sheet=input$coldata_sheet, 
+                    anno_type="samples", 
+                    anno_id_col =input$coldata_id_column, 
+                    data_id_col ="sample") %>%
+        mt_reporting_data() %>%
+      # Preprocessing ----
+        mt_reporting_heading(heading = "Preprocessing", lvl=1) %>%
+        mt_reporting_heading(heading = "Filtering", lvl = 2) %>%
+        mt_plots_missingness(feat_max=input$mod6_filter_feat_max,samp_max = input$mod6_filter_sample_max) %>%
+        mt_pre_filter_missingness(feat_max = input$mod6_filter_feat_max, samp_max = input$mod6_filter_sample_max) %>%
+        mt_plots_missingness(feat_max=input$mod6_filter_feat_max, samp_max = input$mod6_filter_sample_max) %>%
+        mt_anno_missingness(anno_type = "samples", out_col = "missing") %>%
+        mt_anno_missingness(anno_type = "features", out_col = "missing") %>%
+        mt_reporting_heading(heading = "Normalization", lvl = 2) %>%
+        mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "Original", plot_logged = T) %>%
+        {.},
+      
+      if(!is.null(input$pre_batch_column)){
+        D %<>%
+          mt_pre_batch_median(batch_col = input$pre_batch_column)
+      },
+      D <- D %>%
+        mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "After batch correction", plot_logged = T) %>%
+        mt_pre_norm_quot(feat_max = input$mod6_feat_max_norm) %>%
+        mt_plots_dilution_factor(in_col=input$pre_sample_color_column) %>%
+        mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "After normalization", plot_logged = T) %>%
+        mt_pre_trans_log() %>%
+        mt_pre_impute_knn() %>%
+        mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "After imputation", plot_logged = T) %>%
+        mt_pre_outlier_detection_univariate() %>%
+        mt_reporting_data() %>%
+        mt_reporting_heading(heading = "Global Statistics", lvl = 1) %>%
+        {.},
+      # add PCA/UMAP plots
+      lapply(input$pre_pca_color_column, function(x){
+        D <<- D %>%
+          mt_plots_pca(scale_data = T, title = sprintf("scaled PCA - %s",x), color=!!sym(x), size=2.5, ggadd=scale_size_identity()) %>%
+          mt_plots_umap(scale_data = T, title = sprintf("scaled UMAP - %s",x), color=!!sym(x), size=2.5, ggadd=scale_size_identity()) %>%
+          {.}
+      }) %>% invisible,
+      # add heatmap
+      D %<>%
+        mt_plots_heatmap(scale_data = T, annotation_col = input$pre_heatmap_anno_column, annotation_row = input$pre_heatmap_anno_row,
+                         clustering_method = "ward.D2", fontsize = 5, cutree_rows = 3, cutree_cols = 3, color=gplots::bluered(101)) %>%
+        {.}
+    )
+  })
+  # render logic of the log text of differential analysis
+  output$log_differ <- renderText({
+    capture.output(
+      ## loading
+      file_data <- as.character(input$file1$datapath),
+      D <-
+        mt_load_xls(file=file_data, 
+                    sheet=input$assay_sheet, 
+                    samples_in_row=input$mod6_assay_in_row, 
+                    id_col=input$assay_id_column) %>%
+        mt_anno_xls(file=file_data, 
+                    sheet=input$rowdata_sheet,
+                    anno_type="features", 
+                    anno_id_col=input$rowdata_id_column, 
+                    data_id_col = "name") %>%
+        mt_anno_xls(file=file_data, 
+                    sheet=input$coldata_sheet, 
+                    anno_type="samples", 
+                    anno_id_col =input$coldata_id_column, 
+                    data_id_col ="sample") %>%
+        mt_reporting_data() %>%
+        # Preprocessing ----
+      mt_reporting_heading(heading = "Preprocessing", lvl=1) %>%
+        mt_reporting_heading(heading = "Filtering", lvl = 2) %>%
+        mt_plots_missingness(feat_max=input$mod6_filter_feat_max,samp_max = input$mod6_filter_sample_max) %>%
+        mt_pre_filter_missingness(feat_max = input$mod6_filter_feat_max, samp_max = input$mod6_filter_sample_max) %>%
+        mt_plots_missingness(feat_max=input$mod6_filter_feat_max, samp_max = input$mod6_filter_sample_max) %>%
+        mt_anno_missingness(anno_type = "samples", out_col = "missing") %>%
+        mt_anno_missingness(anno_type = "features", out_col = "missing") %>%
+        mt_reporting_heading(heading = "Normalization", lvl = 2) %>%
+        mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "Original", plot_logged = T) %>%
+        {.},
+      
+      if(!is.null(input$pre_batch_column)){
+        D %<>%
+          mt_pre_batch_median(batch_col = input$pre_batch_column)
+      },
+      D <- D %>%
+        mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "After batch correction", plot_logged = T) %>%
+        mt_pre_norm_quot(feat_max = input$mod6_feat_max_norm) %>%
+        mt_plots_dilution_factor(in_col=input$pre_sample_color_column) %>%
+        mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "After normalization", plot_logged = T) %>%
+        mt_pre_trans_log() %>%
+        mt_pre_impute_knn() %>%
+        mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "After imputation", plot_logged = T) %>%
+        mt_pre_outlier_detection_univariate() %>%
+        mt_reporting_data() %>%
+        mt_reporting_heading(heading = "Global Statistics", lvl = 1) %>%
+        {.},
+      # add PCA/UMAP plots
+      lapply(input$pre_pca_color_column, function(x){
+        D <<- D %>%
+          mt_plots_pca(scale_data = T, title = sprintf("scaled PCA - %s",x), color=!!sym(x), size=2.5, ggadd=scale_size_identity()) %>%
+          mt_plots_umap(scale_data = T, title = sprintf("scaled UMAP - %s",x), color=!!sym(x), size=2.5, ggadd=scale_size_identity()) %>%
+          {.}
+      }) %>% invisible,
+      # add heatmap
+      D %<>%
+        mt_plots_heatmap(scale_data = T, annotation_col = input$pre_heatmap_anno_column, annotation_row = input$pre_heatmap_anno_row,
+                         clustering_method = "ward.D2", fontsize = 5, cutree_rows = 3, cutree_cols = 3, color=gplots::bluered(101)) %>%
+        {.},
+      # Differential analysis ----
+      D %<>%
+        mt_reporting_heading(heading = "Statistical Analysis", lvl = 1) %>%
+        diff_analysis_func(var=input$outcome,
+                           binary=input$mod6_outcome_binary,
+                           analysis_type=input$mod6_analysis_type, 
+                           mult_test_method=input$mod6_mult_test_method,
+                           alpha=input$mod6_sig_threshold,
+                           group_col_barplot=input$group_col_barplot,
+                           color_col_barplot=input$color_col_barplot) %>%
+        {.}
+    )
+  })
+  # download SE button
+  # https://mastering-shiny.org/action-transfer.html
+  output$download_se <- downloadHandler(
+    filename = function() {
+      paste0("SE_", Sys.Date(), ".Rdata")
+    },
+    content = function(fname) {
+      ## loading
+      file_data <- as.character(input$file1$datapath)
+      D <-
+        mt_load_xls(file=file_data, 
+                    sheet=input$assay_sheet, 
+                    samples_in_row=input$mod6_assay_in_row, 
+                    id_col=input$assay_id_column) %>%
+        mt_anno_xls(file=file_data, 
+                    sheet=input$rowdata_sheet,
+                    anno_type="features", 
+                    anno_id_col=input$rowdata_id_column, 
+                    data_id_col = "name") %>%
+        mt_anno_xls(file=file_data, 
+                    sheet=input$coldata_sheet, 
+                    anno_type="samples", 
+                    anno_id_col =input$coldata_id_column, 
+                    data_id_col ="sample") %>%
+        mt_reporting_data() %>%
+        # Preprocessing ----
+      mt_reporting_heading(heading = "Preprocessing", lvl=1) %>%
+        mt_reporting_heading(heading = "Filtering", lvl = 2) %>%
+        mt_plots_missingness(feat_max=input$mod6_filter_feat_max,samp_max = input$mod6_filter_sample_max) %>%
+        mt_pre_filter_missingness(feat_max = input$mod6_filter_feat_max, samp_max = input$mod6_filter_sample_max) %>%
+        mt_plots_missingness(feat_max=input$mod6_filter_feat_max, samp_max = input$mod6_filter_sample_max) %>%
+        mt_anno_missingness(anno_type = "samples", out_col = "missing") %>%
+        mt_anno_missingness(anno_type = "features", out_col = "missing") %>%
+        mt_reporting_heading(heading = "Normalization", lvl = 2) %>%
+        mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "Original", plot_logged = T) %>%
+        {.}
+      
+      if(!is.null(input$pre_batch_column)){
+        D %<>%
+          mt_pre_batch_median(batch_col = input$pre_batch_column)
+      }
+      D <- D %>%
+        mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "After batch correction", plot_logged = T) %>%
+        mt_pre_norm_quot(feat_max = input$mod6_feat_max_norm) %>%
+        mt_plots_dilution_factor(in_col=input$pre_sample_color_column) %>%
+        mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "After normalization", plot_logged = T) %>%
+        mt_pre_trans_log() %>%
+        mt_pre_impute_knn() %>%
+        mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "After imputation", plot_logged = T) %>%
+        mt_pre_outlier_detection_univariate() %>%
+        mt_reporting_data() %>%
+        mt_reporting_heading(heading = "Global Statistics", lvl = 1) %>%
+        {.}
+      # add PCA/UMAP plots
+      lapply(input$pre_pca_color_column, function(x){
+        D <<- D %>%
+          mt_plots_pca(scale_data = T, title = sprintf("scaled PCA - %s",x), color=!!sym(x), size=2.5, ggadd=scale_size_identity()) %>%
+          mt_plots_umap(scale_data = T, title = sprintf("scaled UMAP - %s",x), color=!!sym(x), size=2.5, ggadd=scale_size_identity()) %>%
+          {.}
+      }) %>% invisible
+      # add heatmap
+      D %<>%
+        mt_plots_heatmap(scale_data = T, annotation_col = input$pre_heatmap_anno_column, annotation_row = input$pre_heatmap_anno_row,
+                         clustering_method = "ward.D2", fontsize = 5, cutree_rows = 3, cutree_cols = 3, color=gplots::bluered(101)) %>%
+        {.}
+      # Differential analysis ----
+      D %<>%
+        mt_reporting_heading(heading = "Statistical Analysis", lvl = 1) %>%
+        diff_analysis_func(var=input$outcome,
+                           binary=input$mod6_outcome_binary,
+                           analysis_type=input$mod6_analysis_type, 
+                           mult_test_method=input$mod6_mult_test_method,
+                           alpha=input$mod6_sig_threshold,
+                           group_col_barplot=input$group_col_barplot,
+                           color_col_barplot=input$color_col_barplot) %>%
+        {.}
+      # write Rdata to local
+      save(D, file=fname)
+    }
+  )
+  
 }
 
 # Run the application 

@@ -1455,6 +1455,7 @@ server <- function(input, output) {
            "col"=list(downloadButton("mod5_download_plotly", "download plotly"),
                       plotlyOutput('mod5_plot', height = 600)),
            "row"=list(fluidRow(
+<<<<<<< HEAD
              splitLayout(style = "border: 1px", cellWidths = c(1000, 1000), 
                          downloadButton("mod5_download_plotly", "download plotly"), 
                          downloadButton("mod5_download_plotly2", "download plotly")
@@ -1466,6 +1467,19 @@ server <- function(input, output) {
                          plotlyOutput('mod5_plot2', height = 600)
              )
            ))
+=======
+        splitLayout(style = "border: 1px", cellWidths = c(1000, 1000), 
+                    downloadButton("mod5_download_plotly", "download plotly"), 
+                    downloadButton("mod5_download_plotly2", "download plotly")
+        )
+      ),
+      fluidRow(
+        splitLayout(style = "height:600px; border: 1px", cellWidths = c(1000, 1000), 
+                    plotlyOutput('mod5_plot', height = 600), 
+                    plotlyOutput('mod5_plot2', height = 600)
+        )
+      ))
+>>>>>>> 996563ef929b667961b5f4f9f23e84227ce4d31c
     )
   })
   

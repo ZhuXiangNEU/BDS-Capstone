@@ -1,7 +1,9 @@
 .navbar-brand {
   height: 60px;
+  line-height: 60px;
   font-size: 20pt;
 } /* title size*/
+/*center header title vertically by setting line-height the same as height*/
 .navbar-nav {
   height: 60px;
   font-size: 16pt;
@@ -21,7 +23,7 @@
   font-size: 12pt;
 }
 .navbar-header {
-  width: 19.5%;
+  width: 25%;
 } /* title width*/
 
 /* Main navbar colour: title background*/
@@ -55,3 +57,20 @@
 .btn:focus {outline: 0;}
       
 .well {background-color:#f7f7f7;}   /* sidebarPanel color */
+
+/*center tab vertically*/
+.container-fluid {
+  height: 80px !important;
+}
+
+.leaflet-top .leaflet-control {
+    margin-top: 40px !important;
+}
+
+.navbar-nav li a {
+  height: 80px !important;
+}
+
+.navTitle{
+    line-height: 50px;
+}

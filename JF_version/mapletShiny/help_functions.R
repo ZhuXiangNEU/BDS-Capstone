@@ -4,22 +4,22 @@ get_obj_name <- function(D){
   obj_list <- data.frame()
   for (i in seq_along(metadata(D)$results)) {
     for (j in seq_along(metadata(D)$results[[i]]$fun)) {
-     obj_list[i, j] <- metadata(D)$results[[i]]$fun[j]
-   }
+      obj_list[i, j] <- metadata(D)$results[[i]]$fun[j]
+    }
   }
-
+  
   # Extract the stat_name
   stat_name <- data.frame(stat_name=NA)
   for (i in seq_along(metadata(D)$results)) {
     stat_name[i, 1] <- if ('stat_name' %in% names(metadata(D)$results[[i]]$args)) {
       metadata(D)$results[[i]]$args$stat_name
-   } else if ('stat_list' %in% names(metadata(D)$results[[i]]$args) & class(metadata(D)$results[[i]]$args$stat_list)!="call") {
+    } else if ('stat_list' %in% names(metadata(D)$results[[i]]$args) & class(metadata(D)$results[[i]]$args$stat_list)!="call") {
       metadata(D)$results[[i]]$args$stat_list
-   } else {
-     NA
-   }
+    } else {
+      NA
+    }
   }
-
+  
   # Merge object names and stat_name
   order_id <- 1:nrow(obj_list)
   obj_name <- cbind(order_id, obj_list, stat_name) 
@@ -37,6 +37,27 @@ get_obj_name <- function(D){
   return(obj_name)
 }
 
+# get pathway annotations
+get_pathway_annotations <- function(D, pwvar) {
+  rd <- rowData(D) %>% as.data.frame %>%
+    dplyr::mutate(name = rownames(rowData(D))) %>%
+    dplyr::select(name,!!sym(pwvar), BIOCHEMICAL)
+  if (class(rd[[pwvar]][1]) == "AsIs") {
+    # remove rows with missing pathway annotations and unnest pathway column
+    miss_idx <-
+      apply(rd, 1, function(x) {
+        x[[pwvar]][[1]] %>% is.null() %>% unname()
+      })
+    rd <- rd[!miss_idx, ] %>% tidyr::unnest(!!sym(pwvar))
+    # extract pathway_name column form pathways data frame
+    rd %<>% dplyr::left_join(metadata(D)$pathways[[pwvar]], by = setNames("ID", pwvar)) %>%
+      dplyr::select(name, BIOCHEMICAL, pathway_name)
+    # replace value for pathway column variable
+    pwvar <- "pathway_name"
+  }
+  
+  rd
+}
 
 # Get the data set -----------------------
 get_data_by_name <- function(D, args.name, plot.nmae, stat.name) {
@@ -228,8 +249,21 @@ mod5_boxplot <- function(D, x, x_cate, y, y_cate, fill, hover, ...){
     theme(legend.title = element_blank()) +
     ggtitle("Boxplot with ignored outliers and Jitter with Set Seed")
   
-  fig <- ggplotly(p, tooltip=c("x", "y", "hover")) %>%
+  # get number of boxplots from plot object
+  nbox <- p$data %>% dplyr::pull(p$mapping$x[[2]]) %>% unique %>% length
+  
+  # draw plotly
+  fig <- ggplotly(p) %>%
     layout(legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3))
+  
+  # remove outlier dots from boxplot layer (but not from jitter layer)
+  lapply(1:nbox, function(i){
+    fig$x$data[i] <<- lapply(fig$x$data[i], FUN = function(x){
+      x$marker = list(opacity = 0)
+      return(x)
+    })
+  })
+  # return fig
   fig
 }
 
@@ -310,4 +344,231 @@ diff_analysis_func <- function(D,
     {.}
   
   return(D)
+}
+
+# get the volcano plot in mod2--------------------
+mod2_plot_vol <- function(D, inputs, legend_name, d, pwvar, alpha) {
+  # Get volcano data set if the plot1 is null
+  data_vol <- get_data_by_name(D, "stat_name", "volcano", inputs[1])
+  
+  # Get volcano data set if the plot1 is bar
+  if (inputs[2] == "bar") {
+    if (!is.null(d)) {
+      # get the click information for the bar plot 
+      data_bar <- get_data_by_name(D, "stat_list", "stats", inputs[1])
+      lvls <- rev(levels(data_bar$label))
+      label <- lvls[round(as.numeric(d$y))]
+      sub_pathway_name <- data_bar[data_bar$label == label, ]$name
+      # get the variable name by sub_pathway_name
+      row_data <- rowData(D) %>% data.frame()
+      names <- unlist(row_data[row_data[pwvar] == sub_pathway_name,]$name)
+      data_vol <- data_vol[data_vol$name %in% names, ]
+    }
+  }
+  # Set the legend color column
+  data_vol[, legend_name] <- ifelse(data_vol$p.adj < alpha, TRUE, FALSE)
+  
+  # draw the plot2
+  plot <- data_vol %>%
+    ggplot(aes(x = statistic, y = p.value, color = !!sym(legend_name), label = name)) +
+    geom_point() +
+    scale_y_continuous(trans = reverselog_trans(10),
+                       breaks = scales::trans_breaks("log10", function(x) 10^x),
+                       labels = scales::trans_format("log10", scales::math_format(10^.x))) +
+    labs(y = "p-value (10^(-y))") +
+    ggtitle(paste0(inputs[1])) +
+    scale_color_brewer(palette="Dark2")
+  
+  if (inputs[2] == "bar") {
+    plot <- plot +
+      geom_point(size = 3)
+    ggtitle(paste0(sub_pathway_name, "-", inputs[1]))
+  }
+  
+  plot
+}
+
+
+
+# get the equalizer plot in mod2--------------------
+mod2_plot_eq <- function(D, inputs, rd, alpha, pwvar, path_name, d) {
+  # add pathway annotations to results
+  res <- maplet::mtm_get_stat_by_name(D, inputs[1]) %>%
+    dplyr::left_join(rd, by=c("var"="name")) %>%
+    dplyr::mutate(x = sign(statistic)*log10(p.adj)) %>%
+    dplyr::filter(!is.na(BIOCHEMICAL))
+  # compute multiple testing correction line
+  sel <- res %>% 
+    dplyr::filter(p.adj < alpha)
+  if(nrow(sel)>0){
+    xfine <- sel %>% .$p.adj %>% max(., na.rm = T)
+  } else {
+    xfine <- Inf
+  }
+  
+  # If plot1 is not bar
+  if (inputs[2] == "null") {
+    df <- res %>%
+      dplyr::filter(!!sym(pwvar)==path_name)
+  } else {
+    if (!is.null(d)) {
+      # get the click information for the bar plot
+      data_bar <- get_data_by_name(D, "stat_list", "stats", inputs[1])
+      lvls <- rev(levels(data_bar$label))
+      label <- lvls[round(as.numeric(d$y))]
+      sub_pathway_name <- data_bar[data_bar$label == label,]$name
+      
+      # create equalizer plots
+      df <- res %>%
+        dplyr::filter(!!dplyr::sym(pwvar) == sub_pathway_name)
+    }
+  }
+  
+  # colors
+  clrs <- c("#9494FF","red")
+  # x axis limits
+  a = max(abs(df$x)) + 0.3
+  plot <-
+    ggplot(df, aes(x = x, y = BIOCHEMICAL)) +
+    geom_vline(xintercept = 0, color = "gray") +
+    (if (!is.infinite(xfine)) {
+      geom_vline(
+        xintercept = c(-log10(xfine), log10(xfine)),
+        color = "red",
+        alpha = 0.4
+      )
+    }) +
+    (if (!is.infinite(xfine)) {
+      ggtitle(sprintf("Differential Metabolites at alpha %.2f", alpha))
+    } else{
+      ggtitle(sprintf("No significant results at alpha %.2f", alpha))
+    }) +
+    geom_point(pch = 22,
+               fill = clrs[1],
+               size = 3) +
+    facet_grid(as.formula(sprintf("%s~.", pwvar)),
+               scales = "free_y",
+               space = "free_y") +
+    theme(
+      strip.background = element_rect(fill = NA),
+      strip.text = element_text(colour = 'black', face = "bold"),
+      strip.text.y = element_text(angle = 0, hjust = 0),
+      panel.grid.major.y = element_line(color = "gray"),
+      panel.grid.major.x = element_blank(),
+      panel.grid.minor.x = element_blank(),
+      panel.background = element_rect(fill = NA, color =
+                                        "black")
+    ) +
+    ylab("") +
+    xlab("sign(statistic)*log10(p.adj)") +
+    scale_x_continuous(limits = c(-a, a))
+  
+  plot
+}
+
+
+# get the box/scatter plot in mod2--------------------
+mod2_plot_box_scatter <- function(D,
+                                  inputs,
+                                  d.bar,
+                                  d.eq,
+                                  d.vol,
+                                  rd,
+                                  pwvar,
+                                  path_name,
+                                  alpha,
+                                  is_categorical,
+                                  data) {
+  
+  # get the bar name if plot1 is selected "bar"
+  if (inputs[2] == "bar") {
+    if (!is.null(d.bar)) {
+      data_bar <- get_data_by_name(D, "stat_list", "stats", inputs[1])
+      lvls <- rev(levels(data_bar$label))
+      label <- lvls[round(as.numeric(d.bar$y))]
+      sub_pathway_name <- data_bar[data_bar$label == label,]$name
+    }
+  }
+  
+  # Get the metabolite name by click information
+  if (inputs[3] == "equalizer") {
+    if (!is.null(d.eq)) {
+      res <- maplet::mtm_get_stat_by_name(D, inputs[1]) %>%
+        dplyr::left_join(rd, by=c("var"="name")) %>%
+        dplyr::mutate(x = sign(statistic)*log10(p.adj)) %>%
+        dplyr::filter(!is.na(BIOCHEMICAL))
+      
+      # get the data set of the equalizer plot
+      if (inputs[2] == "bar") {
+        # Filter the data by selected pwvar
+        df <- res %>%
+          dplyr::filter(!!dplyr::sym(pwvar) == sub_pathway_name)
+      } else {
+        df <- res %>%
+          dplyr::filter(!!dplyr::sym(pwvar) == path_name)
+      }
+      # get the metabolite name by click info for equalizer plot
+      metabolite <- df[as.numeric(d.eq$pointNumber) + 1,]$var[1]
+      term <- df$term[1]
+    }
+  } else { # get the click info in volcano plot
+    if (!is.null(d.vol)) {
+      data_vol <- get_data_by_name(D, "stat_name", "volcano", inputs[1])
+      if (inputs[2] == "bar") {
+        # get the variable name by sub_pathway_name
+        row_data <- rowData(D) %>% data.frame()
+        names <- unlist(row_data[row_data[pwvar] == sub_pathway_name,]$name)
+        data_vol <- data_vol[data_vol$name %in% names, ]
+      }
+      # set the column curveNumber by color legend
+      p.adj.significant <- alpha
+      data_vol[, "curveNumber"] <- ifelse(data_vol$p.adj < as.numeric(p.adj.significant), 1, 0)
+      data_vol_true <- data_vol[data_vol$curveNumber==1, ]
+      data_vol_false <- data_vol[data_vol$curveNumber==0, ]
+      # By using click info (curveNumber & ponitNumber) to get the metabolite name
+      metabolite <- ifelse(d.vol$curveNumber == 1,
+                           data_vol_true[d.vol$pointNumber + 1, ]$var[1],
+                           data_vol_false[d.vol$pointNumber + 1, ]$var[1])
+      term <- data_vol$term[1]
+      
+    }
+  }
+  
+  # Filter the data by metabolite name
+  data <- data[data$var == metabolite, ]
+  
+  # Treat as categorical or not?
+  if (is_categorical) {
+    data[, term] <- factor(data[, term])
+  } else {
+    data[, term] <- as.numeric(data[, term])
+  }
+  
+  # Draw the plot3
+  if (inputs[4] == "scatter") {
+    plot <- data %>%
+      ggplot(aes(x = !!sym(term), y = value)) +
+      geom_point(size = 3) +
+      geom_smooth(method = "lm", se = T, color = "black") + 
+      ggtitle(metabolite)
+  } else {
+    plot <- data %>%
+      ggplot(aes(x = !!sym(term), y = value)) +
+      geom_boxplot() +
+      geom_jitter(size = 3, width = 0.2) +
+      ggtitle(metabolite)
+  }
+  
+  plot
+}
+
+# get log text from a SE object
+
+get_log_text <- function(D){
+  dt <- metadata(D)$results
+  text <- lapply(names(dt), function(x){
+    sprintf("%s\n",dt[[x]]$logtxt)
+  }) %>% {do.call(cat,.)}
+  # return text
+  text
 }

@@ -311,7 +311,7 @@ ui <- fluidPage(
                               HTML("<b>Module 1</b> extracts all the result objects one at a time."
                               )),
                             tags$p(
-                              HTML("Users can assess results in a drop-down menu that offers a list of a stat_name and a plot type (e.g. missingness, val)."
+                              HTML("Users can assess results in a drop-down menu that offers a list of a stat_name and a plot type (e.g. missingness, pval)."
                               )),
                             br(),   
                             # select plot type or stats table

@@ -77,7 +77,7 @@ ui <- fluidPage(
                               HTML("<b>Module 1</b> requires extracting all the result objects one at a time."
                               )),
                             tags$p(
-                              HTML("Users can assess results in a drop-down menu that offers a list of a stat_name and a plot type (e.g. Ã¢ÂÂmissingnessÃ¢ÂÂ, Ã¢ÂÂpvalÃ¢ÂÂ)."
+                              HTML("Users can assess results in a drop-down menu that offers a list of a stat_name and a plot type (e.g. missingness, pval)."
                               )),
                             br(),   
                             # select plot type or stats table
@@ -100,6 +100,9 @@ ui <- fluidPage(
                               HTML("<b>Hint:<br></b>Outputs are delayed untill you click 'UPDATE' button after selection."
                               )),
                             br(),
+                            tags$p(
+                              HTML("<b>Hint:<br></b>Outputs are delayed untill you click 'UPDATE' button after selection. Some plots such as box plot or multiple plots may cost dozens of seconds to show up."
+                              )),
                             # delay the output
                             actionButton("mod1_go", "Update")
                ), 
@@ -171,6 +174,9 @@ ui <- fluidPage(
                                value = FALSE
                  ),
                  br(),
+                 tags$p(
+                   HTML("<b>Hint:<br></b>Outputs are delayed untill you click 'UPDATE' button after selection."
+                   )),
                  actionButton("mod2_go", "Update")
                ),
                mainPanel(
@@ -218,6 +224,9 @@ ui <- fluidPage(
                               HTML("<b>Hint:<br></b>Outputs are delayed untill you click 'UPDATE' button after selection."
                               )),
                             br(),
+                            tags$p(
+                              HTML("<b>Hint:<br></b>Outputs are delayed untill you click 'UPDATE' button after selection."
+                              )),
                             # delay the output
                             actionButton("mod3_go", "Update")
                ), 
@@ -266,6 +275,9 @@ ui <- fluidPage(
                                value = FALSE
                  ),
                  br(),
+                 tags$p(
+                   HTML("<b>Hint:<br></b>Outputs are delayed untill you click 'UPDATE' button after selection."
+                   )),
                  # delay the output
                  actionButton("mod4_go", "Update")
                ),

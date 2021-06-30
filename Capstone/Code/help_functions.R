@@ -1,24 +1,25 @@
+
 # Extract the object names from result SE "D"------------
 get_obj_name <- function(D){
   obj_list <- data.frame()
   for (i in seq_along(metadata(D)$results)) {
     for (j in seq_along(metadata(D)$results[[i]]$fun)) {
-     obj_list[i, j] <- metadata(D)$results[[i]]$fun[j]
-   }
+      obj_list[i, j] <- metadata(D)$results[[i]]$fun[j]
+    }
   }
-
+  
   # Extract the stat_name
   stat_name <- data.frame(stat_name=NA)
   for (i in seq_along(metadata(D)$results)) {
     stat_name[i, 1] <- if ('stat_name' %in% names(metadata(D)$results[[i]]$args)) {
       metadata(D)$results[[i]]$args$stat_name
-   } else if ('stat_list' %in% names(metadata(D)$results[[i]]$args) & class(metadata(D)$results[[i]]$args$stat_list)!="call") {
+    } else if ('stat_list' %in% names(metadata(D)$results[[i]]$args) & class(metadata(D)$results[[i]]$args$stat_list)!="call") {
       metadata(D)$results[[i]]$args$stat_list
-   } else {
-     NA
-   }
+    } else {
+      NA
+    }
   }
-
+  
   # Merge object names and stat_name
   order_id <- 1:nrow(obj_list)
   obj_name <- cbind(order_id, obj_list, stat_name) 
@@ -27,9 +28,14 @@ get_obj_name <- function(D){
            "(no stat_name)", 
            obj_name$stat_name)
   
+  # count number of objects in the list of output of each metadata
+  count_list <- c()
+  for (i in seq_along(metadata(D)$results)){
+    count_list[i] <- length(metadata(D)$results[[i]]$output)
+  }
+  obj_name$cnt <- count_list
   return(obj_name)
 }
-
 
 # get pathway annotations
 get_pathway_annotations <- function(D, pwvar) {
@@ -53,7 +59,6 @@ get_pathway_annotations <- function(D, pwvar) {
   rd
 }
 
-
 # Get the data set -----------------------
 get_data_by_name <- function(D, args.name, plot.nmae, stat.name) {
   plots <- mtm_res_get_entries(D, c("plots", plot.nmae))
@@ -73,6 +78,18 @@ reverselog_trans <- function (base = exp(1)){
   scales::trans_new(paste0("reverselog-", format(base)), trans, inv,
                     scales::log_breaks(base = base),
                     domain = c(1e-100, Inf))
+}
+
+# get the threshold for significance (extracted from corresponding stat_bar plot)
+get_threshold_for_p_adj <- function(stat_name) {
+  # define threshold for significance (extracted from corresponding stat_bar plot)
+  stats_plots <- mtm_res_get_entries(D, c("plots", "stats"))
+  for (plot in stats_plots) {
+    if (plot$args$stat_list == stat_name) {
+      alpha <- plot$args$feat_filter[3][[1]]
+    }
+  }
+  alpha
 }
 
 
@@ -244,8 +261,21 @@ mod5_boxplot <- function(D, x, x_cate, y, y_cate, fill, hover, ...){
     theme(legend.title = element_blank()) +
     ggtitle("Boxplot with ignored outliers and Jitter with Set Seed")
   
-  fig <- ggplotly(p, tooltip=c("x", "y", "hover")) %>%
+  # get number of boxplots from plot object
+  nbox <- p$data %>% dplyr::pull(p$mapping$x[[2]]) %>% unique %>% length
+  
+  # draw plotly
+  fig <- ggplotly(p) %>%
     layout(legend = list(orientation = 'h', xanchor = "center", x = 0.5, y = -0.3))
+  
+  # remove outlier dots from boxplot layer (but not from jitter layer)
+  lapply(1:nbox, function(i){
+    fig$x$data[i] <<- lapply(fig$x$data[i], FUN = function(x){
+      x$marker = list(opacity = 0)
+      return(x)
+    })
+  })
+  # return fig
   fig
 }
 
@@ -278,6 +308,55 @@ mod5_barplot <- function(D, x, fill, hover, ...){
     )
 }
 
+# SE generating function for Mod6
+diff_analysis_func <- function(D,
+                               var,
+                               binary=F,
+                               analysis_type="lm",
+                               mult_test_method="BH",
+                               alpha=0.05,
+                               group_col_barplot,
+                               color_col_barplot=NULL){
+  D %<>%
+    mt_reporting_heading(heading = sprintf("%s Differential Analysis",var), lvl = 2) %>%
+    {.}
+  
+  if(analysis_type=="lm"){
+    D %<>%
+      mt_stats_univ_lm(formula = as.formula(sprintf("~  %s",var)), stat_name = sprintf("%s analysis",var)) %>%
+      {.}
+  }else{
+    D %<>%
+      mt_stats_univ_cor(in_col = var, stat_name = sprintf("%s analysis",var),method = analysis_type) %>%
+      {.}
+  }
+  
+  if(binary){
+    D %<>%
+      mt_post_fold_change(stat_name = sprintf("%s analysis",var))
+  }
+  D %<>%
+    mt_post_multtest(stat_name = sprintf("%s analysis",var), method = mult_test_method) %>%
+    mt_reporting_stats(stat_name = sprintf("%s analysis",var), stat_filter = p.adj < alpha) %>%
+    mt_plots_volcano(stat_name = sprintf("%s analysis",var),
+                     x = !!sym(ifelse(binary,"fc","statistic")),
+                     feat_filter = p.adj < alpha,
+                     color = p.adj < alpha) %>%
+    mt_plots_box_scatter(stat_name = sprintf("%s analysis",var),
+                         x = !!sym(var),
+                         plot_type = ifelse(binary,"box","scatter"),
+                         feat_filter = p.adj < alpha, 
+                         feat_sort = p.value,
+                         annotation = "{sprintf('P-value: %.2e', p.value)}\nP.adj: {sprintf('%.2e', p.adj)}") %>%
+    mt_plots_stats_pathway_bar(stat_list = sprintf("%s analysis",var),
+                               y_scale = "count",
+                               feat_filter = p.adj < alpha,
+                               group_col = group_col_barplot,
+                               color_col = color_col_barplot) %>%
+    {.}
+  
+  return(D)
+}
 
 # get the volcano plot in mod2--------------------
 mod2_plot_vol <- function(D, inputs, legend_name, d, pwvar, alpha) {
@@ -402,16 +481,16 @@ mod2_plot_eq <- function(D, inputs, rd, alpha, pwvar, path_name, d) {
 
 # get the box/scatter plot in mod2--------------------
 mod2_plot_box_scatter <- function(D,
-                             inputs,
-                             d.bar,
-                             d.eq,
-                             d.vol,
-                             rd,
-                             pwvar,
-                             path_name,
-                             alpha,
-                             is_categorical,
-                             data) {
+                                  inputs,
+                                  d.bar,
+                                  d.eq,
+                                  d.vol,
+                                  rd,
+                                  pwvar,
+                                  path_name,
+                                  alpha,
+                                  is_categorical,
+                                  data) {
   
   # get the bar name if plot1 is selected "bar"
   if (inputs[2] == "bar") {
@@ -493,4 +572,15 @@ mod2_plot_box_scatter <- function(D,
   }
   
   plot
+}
+
+# get log text from a SE object
+
+get_log_text <- function(D){
+  dt <- metadata(D)$results
+  text <- lapply(names(dt), function(x){
+    sprintf("%s\n",dt[[x]]$logtxt)
+  }) %>% {do.call(cat,.)}
+  # return text
+  text
 }

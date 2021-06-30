@@ -24,58 +24,12 @@ source("help_functions.R")
 load("SE.Rdata")
 # extract object names from result SE 'D'
 obj_name <- get_obj_name(D)
-
 # define pathway annotation column (extracted from corresponding stat_bar
 pwvar <- mtm_res_get_entries(D, c("plots", "stats"))[[1]]$args$group_col
 # define threshold for significance (extracted from corresponding stat_bar plot)
 alpha <- mtm_res_get_entries(D, c("plots", "stats"))[[1]]$args$feat_filter[[3]]
-
 # get pathway annotations
-rd <- rowData(D) %>% as.data.frame %>%
-  dplyr::mutate(name=rownames(rowData(D))) %>%
-  dplyr::select(name, !!sym(pwvar), BIOCHEMICAL)
-if(class(rd[[pwvar]][1])=="AsIs"){
-  # remove rows with missing pathway annotations and unnest pathway column
-  miss_idx <- apply(rd, 1, function(x){x[[pwvar]][[1]] %>% is.null() %>% unname()})
-  rd <- rd[!miss_idx,] %>% tidyr::unnest(!!sym(pwvar))
-  # extract pathway_name column form pathways data frame
-  rd %<>% dplyr::left_join(metadata(D)$pathways[[pwvar]], by=setNames("ID", pwvar)) %>% 
-    dplyr::select(name, BIOCHEMICAL, pathway_name)
-  # replace value for pathway column variable
-  pwvar <- "pathway_name"
-}
-
-# reactive input with number of plots
-n_plots <- 5
-# function to remove a layer from a ggplot object
-# (needed to strip the geom_text annotations)
-# from https://stackoverflow.com/questions/13407236/remove-a-layer-from-a-ggplot2-chart
-remove_geom <- function(ggplot2_object, geom_type) {
-  # Delete layers that match the requested type.
-  layers <- lapply(ggplot2_object$layers, function(x) {
-    if (class(x$geom)[1] == geom_type) {
-      NULL
-    } else {
-      x
-    }
-  })
-  # Delete the unwanted layers.
-  layers <- layers[!sapply(layers, is.null)]
-  ggplot2_object$layers <- layers
-  ggplot2_object
-}
-# access the plot data
-x <- metadata(D)$results
-x[[grep("plots_box_scatter", names(x), value = T)[2]]]$output[[1]]$data %<>%
-  # add one column with order of plot to be displayed
-  dplyr::mutate(rank=p.value %>% dplyr::dense_rank()) %>%
-  # subselect only the first n_plots
-  {.[.$rank<=n_plots,]} 
-# plot reduced facets
-x[[grep("plots_box_scatter", names(x), value = T)[2]]]$output[[1]] %>%
-  remove_geom("GeomText")
-
-
+rd <- get_pathway_annotations(D, pwvar)
 
 ################################################################################
 ########################## Define UI for Shiny application #####################
@@ -123,7 +77,7 @@ ui <- fluidPage(
                               HTML("<b>Module 1</b> requires extracting all the result objects one at a time."
                               )),
                             tags$p(
-                              HTML("Users can assess results in a drop-down menu that offers a list of a stat_name and a plot type (e.g. âmissingnessâ, âpvalâ)."
+                              HTML("Users can assess results in a drop-down menu that offers a list of a stat_name and a plot type (e.g. Ã¢ÂÂmissingnessÃ¢ÂÂ, Ã¢ÂÂpvalÃ¢ÂÂ)."
                               )),
                             br(),   
                             # select plot type or stats table
@@ -754,6 +708,7 @@ server <- function(input, output) {
       plotlyOutput("mod2.vol", height = 600)
     )
     
+    # equalizer/bar -> bar/null -> plot
     plot2 <- switch(inputs[3],
                     "equalizer" = switch(
                       inputs[2],
@@ -785,9 +740,11 @@ server <- function(input, output) {
     legend_name <- paste0("p.adj < ", alpha)
     
     if (!is.null(d)) {
-      plot <- plot_vol(D, inputs, legend_name, d, pwvar, alpha)
+      # D:SE object, inputs: sidebar value, legend_name: legend name
+      # d: click info for bar plot, pwvar: SUB_PATWAY/PATTHWAY, alpha: significant value (ex. p.adj < 0.1)
+      plot <- mod2_plot_vol(D, inputs, legend_name, d, pwvar, alpha)
     } else {
-      plot <- plot_vol(D, inputs, legend_name, NULL, pwvar, alpha)
+      plot <- mod2_plot_vol(D, inputs, legend_name, NULL, pwvar, alpha)
     }
     
     session_store$mod2.vol <- ggplotly(plot, source = "sub_vol") %>%
@@ -828,9 +785,12 @@ server <- function(input, output) {
     d <- event_data("plotly_click", source = "sub_bar")
     
     if (inputs[2] == "null") {
-      plot <- plot_eq(D, inputs, rd, alpha, pwvar, input$mod2.equal.path, NULL)
+      # D:SE object, inputs: sidebar value, rd: pathway annotations
+      # alpha: significant value (ex. p.adj < 0.1), pwvar: SUB_PATWAY/PATTHWAY,
+      # path_name: pathway name for equalizer plot, d: click info for bar plot
+      plot <- mod2_plot_eq(D, inputs, rd, alpha, pwvar, input$mod2.equal.path, NULL)
     } else {
-      plot <- plot_eq(D, inputs, rd, alpha, pwvar, NULL, d)
+      plot <- mod2_plot_eq(D, inputs, rd, alpha, pwvar, NULL, d)
     }
     
     session_store$mod2.eq <- if (is.null(plot)) plotly_empty() else ggplotly(plot, source = "sub_eq")
@@ -876,17 +836,17 @@ server <- function(input, output) {
     d.eq <- event_data("plotly_click", source = "sub_eq")
     d.vol <- event_data("plotly_click", source = "sub_vol")
     
-    plot <- plot_box_scatter(D,
-                             inputs,
-                             d.bar,
-                             d.eq,
-                             d.vol,
-                             rd,
-                             pwvar,
-                             input$mod2.equal.path,
-                             alpha,
-                             input$mod2.categorical,
-                             data)
+    plot <- mod2_plot_box_scatter(D, # SE object
+                             inputs, # sidebar inputs
+                             d.bar, # click info for bar plot
+                             d.eq, # click info for equalizer plot
+                             d.vol, # click info for volcano plot
+                             rd, # pathway annotations
+                             pwvar, # pathway annotation column 
+                             input$mod2.equal.path, # pathway name if plot2 is "equalizer"
+                             alpha, # significant value (ex. p.adj < 0.1)
+                             input$mod2.categorical, # if treated categorical
+                             data) # data for box/scatter plot
     
     session_store$mod2.box.scatter <- if (is.null(plot)) NULL else plot
     session_store$mod2.box.scatter
@@ -1134,7 +1094,7 @@ server <- function(input, output) {
       scale_y_continuous(trans = reverselog_trans(10),
                          breaks = scales::trans_breaks("log10", function(x) 10^x),
                          labels = scales::trans_format("log10", scales::math_format(10^.x))) +
-      labs(y = "p-value (10^-y)") +
+      labs(y = "p-value (10^(-y))") +
       ggtitle(paste0(stat_name_selected(), "-", isSelected)) +
       scale_color_manual(values=c("#999999", "red"))
     
@@ -1225,14 +1185,15 @@ server <- function(input, output) {
       # Draw the plot
       if (input$mod4.box.or.scatter == "scatter") {
         plot <- data %>%
-          ggplot(aes(x = !!sym(term), y = var)) +
-          geom_point() +
+          ggplot(aes(x = !!sym(term), y = value)) +
+          geom_point(size = 3) +
+          geom_smooth(method = "lm", se = T, color = "black") + 
           ggtitle(metabolite)
       } else {
         plot <- data %>%
-          ggplot(aes(x = var, y = !!sym(term))) +
+          ggplot(aes(x = !!sym(term), y = value)) +
           geom_boxplot() +
-          #geom_jitter(width = 0.2) +
+          geom_jitter(size = 3, width = 0.2) +
           ggtitle(metabolite)
       }
     }

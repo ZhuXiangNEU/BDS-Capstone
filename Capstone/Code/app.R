@@ -311,7 +311,7 @@ ui <- fluidPage(
                               HTML("<b>Module 1</b> extracts all the result objects one at a time."
                               )),
                             tags$p(
-                              HTML("Users can assess results in a drop-down menu that offers a list of a stat_name and a plot type (e.g. âmissingnessâ, âpvalâ)."
+                              HTML("Users can assess results in a drop-down menu that offers a list of a stat_name and a plot type (e.g. Ã¢ÂÂmissingnessÃ¢ÂÂ, Ã¢ÂÂpvalÃ¢ÂÂ)."
                               )),
                             br(),   
                             # select plot type or stats table
@@ -1684,7 +1684,7 @@ server <- function(input, output) {
     d <- event_data("plotly_click", source = "sub_bar")
     
     # get the threshold for significance
-    alpha <- get_threshold_for_p_adj(inputs[1])
+    alpha <- get_threshold_for_p_adj(D, inputs[1])
     legend_name <- paste0("p.adj < ", alpha)
     
     if (!is.null(d)) {
@@ -1733,7 +1733,7 @@ server <- function(input, output) {
     # get click info for bar plot
     d <- event_data("plotly_click", source = "sub_bar")
     # get the threshold for significance
-    alpha <- get_threshold_for_p_adj(inputs[1])
+    alpha <- get_threshold_for_p_adj(D, inputs[1])
     
     if (inputs[2] == "null") {
       # D:SE object, inputs: sidebar value, rd: pathway annotations
@@ -1788,7 +1788,7 @@ server <- function(input, output) {
     d.vol <- event_data("plotly_click", source = "sub_vol")
     
     # get the threshold for significance
-    alpha <- get_threshold_for_p_adj(inputs[1])
+    alpha <- get_threshold_for_p_adj(D, inputs[1])
     
     plot <- mod2_plot_box_scatter(D, # SE object
                                   inputs, # sidebar inputs

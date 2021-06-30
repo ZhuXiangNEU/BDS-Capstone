@@ -31,6 +31,29 @@ get_obj_name <- function(D){
 }
 
 
+# get pathway annotations
+get_pathway_annotations <- function(D, pwvar) {
+  rd <- rowData(D) %>% as.data.frame %>%
+    dplyr::mutate(name = rownames(rowData(D))) %>%
+    dplyr::select(name,!!sym(pwvar), BIOCHEMICAL)
+  if (class(rd[[pwvar]][1]) == "AsIs") {
+    # remove rows with missing pathway annotations and unnest pathway column
+    miss_idx <-
+      apply(rd, 1, function(x) {
+        x[[pwvar]][[1]] %>% is.null() %>% unname()
+      })
+    rd <- rd[!miss_idx, ] %>% tidyr::unnest(!!sym(pwvar))
+    # extract pathway_name column form pathways data frame
+    rd %<>% dplyr::left_join(metadata(D)$pathways[[pwvar]], by = setNames("ID", pwvar)) %>%
+      dplyr::select(name, BIOCHEMICAL, pathway_name)
+    # replace value for pathway column variable
+    pwvar <- "pathway_name"
+  }
+  
+  rd
+}
+
+
 # Get the data set -----------------------
 get_data_by_name <- function(D, args.name, plot.nmae, stat.name) {
   plots <- mtm_res_get_entries(D, c("plots", plot.nmae))
@@ -257,7 +280,7 @@ mod5_barplot <- function(D, x, fill, hover, ...){
 
 
 # get the volcano plot in mod2--------------------
-plot_vol <- function(D, inputs, legend_name, d, pwvar, alpha) {
+mod2_plot_vol <- function(D, inputs, legend_name, d, pwvar, alpha) {
   # Get volcano data set if the plot1 is null
   data_vol <- get_data_by_name(D, "stat_name", "volcano", inputs[1])
   
@@ -285,7 +308,7 @@ plot_vol <- function(D, inputs, legend_name, d, pwvar, alpha) {
     scale_y_continuous(trans = reverselog_trans(10),
                        breaks = scales::trans_breaks("log10", function(x) 10^x),
                        labels = scales::trans_format("log10", scales::math_format(10^.x))) +
-    labs(y = "p-value (10^-y)") +
+    labs(y = "p-value (10^(-y))") +
     ggtitle(paste0(inputs[1])) +
     scale_color_brewer(palette="Dark2")
   
@@ -301,7 +324,7 @@ plot_vol <- function(D, inputs, legend_name, d, pwvar, alpha) {
 
 
 # get the equalizer plot in mod2--------------------
-plot_eq <- function(D, inputs, rd, alpha, pwvar, path_name, d) {
+mod2_plot_eq <- function(D, inputs, rd, alpha, pwvar, path_name, d) {
   # add pathway annotations to results
   res <- maplet::mtm_get_stat_by_name(D, inputs[1]) %>%
     dplyr::left_join(rd, by=c("var"="name")) %>%
@@ -378,7 +401,7 @@ plot_eq <- function(D, inputs, rd, alpha, pwvar, path_name, d) {
 
 
 # get the box/scatter plot in mod2--------------------
-plot_box_scatter <- function(D,
+mod2_plot_box_scatter <- function(D,
                              inputs,
                              d.bar,
                              d.eq,
@@ -390,6 +413,7 @@ plot_box_scatter <- function(D,
                              is_categorical,
                              data) {
   
+  # get the bar name if plot1 is selected "bar"
   if (inputs[2] == "bar") {
     if (!is.null(d.bar)) {
       data_bar <- get_data_by_name(D, "stat_list", "stats", inputs[1])
@@ -456,14 +480,15 @@ plot_box_scatter <- function(D,
   # Draw the plot3
   if (inputs[4] == "scatter") {
     plot <- data %>%
-      ggplot(aes(x = !!sym(term), y = var)) +
-      geom_point() +
+      ggplot(aes(x = !!sym(term), y = value)) +
+      geom_point(size = 3) +
+      geom_smooth(method = "lm", se = T, color = "black") + 
       ggtitle(metabolite)
   } else {
     plot <- data %>%
-      ggplot(aes(x = var, y = !!sym(term))) +
+      ggplot(aes(x = !!sym(term), y = value)) +
       geom_boxplot() +
-      #geom_jitter(width = 0.2) +
+      geom_jitter(size = 3, width = 0.2) +
       ggtitle(metabolite)
   }
   

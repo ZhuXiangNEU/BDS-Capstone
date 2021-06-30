@@ -81,7 +81,7 @@ reverselog_trans <- function (base = exp(1)){
 }
 
 # get the threshold for significance (extracted from corresponding stat_bar plot)
-get_threshold_for_p_adj <- function(stat_name) {
+get_threshold_for_p_adj <- function(D, stat_name) {
   # define threshold for significance (extracted from corresponding stat_bar plot)
   stats_plots <- mtm_res_get_entries(D, c("plots", "stats"))
   for (plot in stats_plots) {

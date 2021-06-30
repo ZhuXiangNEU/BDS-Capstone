@@ -1,4 +1,3 @@
-
 # Extract the object names from result SE "D"------------
 get_obj_name <- function(D){
   obj_list <- data.frame()
@@ -78,6 +77,18 @@ reverselog_trans <- function (base = exp(1)){
   scales::trans_new(paste0("reverselog-", format(base)), trans, inv,
                     scales::log_breaks(base = base),
                     domain = c(1e-100, Inf))
+}
+
+# get the threshold for significance (extracted from corresponding stat_bar plot)
+get_threshold_for_p_adj <- function(D, stat_name) {
+  # define threshold for significance (extracted from corresponding stat_bar plot)
+  stats_plots <- mtm_res_get_entries(D, c("plots", "stats"))
+  for (plot in stats_plots) {
+    if (plot$args$stat_list == stat_name) {
+      alpha <- plot$args$feat_filter[3][[1]]
+    }
+  }
+  alpha
 }
 
 
@@ -381,8 +392,8 @@ mod2_plot_vol <- function(D, inputs, legend_name, d, pwvar, alpha) {
   
   if (inputs[2] == "bar") {
     plot <- plot +
-      geom_point(size = 3)
-    ggtitle(paste0(sub_pathway_name, "-", inputs[1]))
+      geom_point(size = 3) +
+      ggtitle(paste0(sub_pathway_name, "-", inputs[1]))
   }
   
   plot
@@ -438,11 +449,6 @@ mod2_plot_eq <- function(D, inputs, rd, alpha, pwvar, path_name, d) {
         alpha = 0.4
       )
     }) +
-    (if (!is.infinite(xfine)) {
-      ggtitle(sprintf("Differential Metabolites at alpha %.2f", alpha))
-    } else{
-      ggtitle(sprintf("No significant results at alpha %.2f", alpha))
-    }) +
     geom_point(pch = 22,
                fill = clrs[1],
                size = 3) +
@@ -462,6 +468,16 @@ mod2_plot_eq <- function(D, inputs, rd, alpha, pwvar, path_name, d) {
     ylab("") +
     xlab("sign(statistic)*log10(p.adj)") +
     scale_x_continuous(limits = c(-a, a))
+  
+  if (inputs[2] == "bar") {
+    plot <- plot +
+      (if (!is.infinite(xfine)) {
+        ggtitle(paste0(sub_pathway_name, "-", inputs[1],"-",
+                       sprintf("Differential Metabolites at alpha %.2f", alpha)))
+      } else{
+        ggtitle(sprintf("No significant results at alpha %.2f", alpha))
+      })
+  }
   
   plot
 }
@@ -562,8 +578,8 @@ mod2_plot_box_scatter <- function(D,
   plot
 }
 
-# get log text from a SE object
 
+# get log text from a SE object
 get_log_text <- function(D){
   dt <- metadata(D)$results
   text <- lapply(names(dt), function(x){

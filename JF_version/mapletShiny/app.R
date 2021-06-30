@@ -70,7 +70,7 @@ ui <- fluidPage(
     title = div(img(src='logo.png',
                     style="float:left; margin-top: 5px; padding-right:20px;padding-bottom:5px",
                     height = 60),
-                "Krumsiek Lab",
+                tags$a("Krumsiek Lab", href="https://github.com/krumsieklab/maplet-shiny", style="color: White"),
                 tags$script(HTML("var header = $('.navbar > .container-fluid');header.append('<div style=\"float:right\"><a href=\"https://weill.cornell.edu\"><img src=\"wcm2.png\" alt=\"logo\" style=\"float:right;height:50px;margin-top: 10px; padding-right:1px; \"> </a></div>');console.log(header)")),
                 windowTitle = "Maplet"),
     # sticky tabs while scrolling main panel
@@ -87,12 +87,12 @@ ui <- fluidPage(
                    # Sidebar panel for inputs ----
                    sidebarPanel(
                      id = "mod6_panel1",
-                     style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; width: 80%; ",
+                     style = "overflow-y: scroll; max-height: 700px; width: 80%; position:relative; margin-left: -5px; margin-top: 45px; margin-bottom: 5px;",
                      tags$p(
                        HTML("<b>Real-Time Pipeline Module</b> starts with original data, creates a pipeline and download it to local."
                        )),
                      tags$p(
-                       HTML("Pipeline is constrained to run in order of <b>Data Loading->Preprocessing->Differential Analysis</b> and no section should be skipped."
+                       HTML("Pipeline is constrained to run <b>Data Loading->Preprocessing->Differential Analysis</b> and no section should be skipped."
                        )),
                      tags$p(
                        HTML("The result SE object is dependent on the <b>instant parameters</b>."
@@ -107,7 +107,7 @@ ui <- fluidPage(
                      
                      tags$hr(),
                      
-                     box(solidHeader = T, collapsible = T, collapsed = TRUE,
+                     box(solidHeader = T, collapsible = T, collapsed = T,
                          title="Sheets for Dimensions", width = "220px",
                          checkboxInput("mod6_assay_in_row", "Samples in rows?", FALSE),
                          tags$p(HTML("Assay sheet:")),
@@ -122,7 +122,7 @@ ui <- fluidPage(
                      
                      tags$hr(),
                      
-                     box(solidHeader = T, collapsible = T, collapsed = TRUE,
+                     box(solidHeader = T, collapsible = T, collapsed = T,
                          title="Data Loading", width = "220px",
                          tags$p(HTML("ID column in assay:")),
                          uiOutput("mod6_assay_id_column"),
@@ -136,28 +136,28 @@ ui <- fluidPage(
                      
                      tags$hr(),
                      
-                     box(solidHeader = T, collapsible = T, collapsed = TRUE,
+                     box(solidHeader = T, collapsible = T, collapsed = T,
                          title="Preprocessing", width = "220px",
                          tags$p(HTML("Max % missingness per feature:")),
                          numericInput("mod6_filter_feat_max", label = NULL,
-                                      value = 1,
+                                      value = 100,
                                       min = 0,
-                                      max = 1,
-                                      step = 0.1,
+                                      max = 100,
+                                      step = 5,
                                       width = "220px"),
                          tags$p(HTML("Max % missingness per feature (normalization):")),
                          numericInput("mod6_feat_max_norm", label = NULL,
-                                      value = 1,
+                                      value = 100,
                                       min = 0,
-                                      max = 1,
-                                      step = 0.1,
+                                      max = 100,
+                                      step = 5,
                                       width = "220px"),
                          tags$p(HTML("Max % missingness per sample:")),
                          numericInput("mod6_filter_sample_max", label = NULL,
-                                      value = 1,
+                                      value = 100,
                                       min = 0,
-                                      max = 1,
-                                      step = 0.1,
+                                      max = 100,
+                                      step = 5,
                                       width = "220px"),
                          tags$p(HTML("Sample coloring column:")),
                          uiOutput("mod6_pre_sample_color_column"),
@@ -175,7 +175,7 @@ ui <- fluidPage(
                      
                      tags$hr(),
                      
-                     box(solidHeader = T, collapsible = T, collapsed = TRUE,
+                     box(solidHeader = T, collapsible = T, collapsed = T,
                          title="Differential Analysis", width = "220px",
                          tags$p(HTML("Outcome variable:")),
                          uiOutput("mod6_outcome"),
@@ -209,7 +209,7 @@ ui <- fluidPage(
                    # Main panel for displaying outputs ----
                    mainPanel(
                      id = "mod6_panel2", 
-                     style = "overflow-y: auto; max-height: 100vh; position: absolute; left: 28%",
+                     style = "overflow-y: auto; max-height: 85vh; position: absolute; left: 28%",
                      br(), 
                      br(), 
                      br(), 
@@ -355,7 +355,7 @@ ui <- fluidPage(
                  style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
                  tags$p(
                    HTML(
-                     "<b>Feature Results Explorer Module</b> requires collection on all statistical results in a table given one metabolite name."
+                     "<b>Feature Results Explorer</b> requires collection on all statistical results in a table given one metabolite name."
                    )
                  ),
                  tags$p(
@@ -402,7 +402,7 @@ ui <- fluidPage(
                  uiOutput("mod4.p2")
                )
              )
-             ),
+    ),
     
     # Define layout of Module-Pathway Results Explorer(coded as mod2) ----------------------------------------------------
     
@@ -414,7 +414,7 @@ ui <- fluidPage(
                  style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
                  tags$p(
                    HTML(
-                     "<b>Pathway Results Explorer Module</b> displays a series of interactive plots at different granularities given a SE and a statname."
+                     "<b>Pathway Results Explorer:</b> Displays a series of interactive plots at different granularities given a SE and a statname."
                    )
                  ),
                  tags$p(
@@ -433,9 +433,9 @@ ui <- fluidPage(
                  br(),
                  radioButtons(
                    "mod2.plot1",
-                   "Select plot1 type:",
-                   choices = list("Bar" = "bar",
-                                  "Not Bar" = "null"),
+                   "Select plot1:",
+                   choices = list("Barplot" = "bar",
+                                  "No Barplot" = "null"),
                    selected  = "bar"
                  ),
                  br(),
@@ -734,9 +734,9 @@ server <- function(input, output) {
     D <- D_load() %>%
       mt_reporting_heading(heading = "Preprocessing", lvl=1) %>%
       mt_reporting_heading(heading = "Filtering", lvl = 2) %>%
-      mt_plots_missingness(feat_max=input$mod6_filter_feat_max,samp_max = input$mod6_filter_sample_max) %>%
-      mt_pre_filter_missingness(feat_max = input$mod6_filter_feat_max, samp_max = input$mod6_filter_sample_max) %>%
-      mt_plots_missingness(feat_max=input$mod6_filter_feat_max, samp_max = input$mod6_filter_sample_max) %>%
+      mt_plots_missingness(feat_max=(input$mod6_filter_feat_max)/100,samp_max = (input$mod6_filter_sample_max)/100) %>%
+      mt_pre_filter_missingness(feat_max = (input$mod6_filter_feat_max)/100, samp_max = (input$mod6_filter_sample_max)/100) %>%
+      mt_plots_missingness(feat_max=(input$mod6_filter_feat_max)/100, samp_max = (input$mod6_filter_sample_max)/100) %>%
       mt_anno_missingness(anno_type = "samples", out_col = "missing") %>%
       mt_anno_missingness(anno_type = "features", out_col = "missing") %>%
       mt_reporting_heading(heading = "Normalization", lvl = 2) %>%
@@ -748,7 +748,7 @@ server <- function(input, output) {
     }
     D <- D %>%
       mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "After batch correction", plot_logged = T) %>%
-      mt_pre_norm_quot(feat_max = input$mod6_feat_max_norm) %>%
+      mt_pre_norm_quot(feat_max = (input$mod6_feat_max_norm)/100) %>%
       mt_plots_dilution_factor(in_col=input$pre_sample_color_column) %>%
       mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "After normalization", plot_logged = T) %>%
       mt_pre_trans_log() %>%
@@ -849,9 +849,9 @@ server <- function(input, output) {
       D <- D %>%
         mt_reporting_heading(heading = "Preprocessing", lvl=1) %>%
         mt_reporting_heading(heading = "Filtering", lvl = 2) %>%
-        mt_plots_missingness(feat_max=input$mod6_filter_feat_max,samp_max = input$mod6_filter_sample_max) %>%
-        mt_pre_filter_missingness(feat_max = input$mod6_filter_feat_max, samp_max = input$mod6_filter_sample_max) %>%
-        mt_plots_missingness(feat_max=input$mod6_filter_feat_max, samp_max = input$mod6_filter_sample_max) %>%
+        mt_plots_missingness(feat_max=(input$mod6_filter_feat_max)/100,samp_max = (input$mod6_filter_sample_max)/100) %>%
+        mt_pre_filter_missingness(feat_max = (input$mod6_filter_feat_max)/100, samp_max = (input$mod6_filter_sample_max)/100) %>%
+        mt_plots_missingness(feat_max=(input$mod6_filter_feat_max)/100, samp_max = (input$mod6_filter_sample_max)/100) %>%
         mt_anno_missingness(anno_type = "samples", out_col = "missing") %>%
         mt_anno_missingness(anno_type = "features", out_col = "missing") %>%
         mt_reporting_heading(heading = "Normalization", lvl = 2) %>%
@@ -863,7 +863,7 @@ server <- function(input, output) {
       }
       D <- D %>%
         mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "After batch correction", plot_logged = T) %>%
-        mt_pre_norm_quot(feat_max = input$mod6_feat_max_norm) %>%
+        mt_pre_norm_quot(feat_max = (input$mod6_feat_max_norm)/100) %>%
         mt_plots_dilution_factor(in_col=input$pre_sample_color_column) %>%
         mt_plots_sample_boxplot(color=!!sym(input$pre_sample_color_column), title = "After normalization", plot_logged = T) %>%
         mt_pre_trans_log() %>%
@@ -1682,6 +1682,9 @@ server <- function(input, output) {
   output$mod2.vol <- renderPlotly({
     inputs <- mod2_input_object()
     d <- event_data("plotly_click", source = "sub_bar")
+    
+    # get the threshold for significance
+    alpha <- get_threshold_for_p_adj(D, inputs[1])
     legend_name <- paste0("p.adj < ", alpha)
     
     if (!is.null(d)) {
@@ -1727,7 +1730,10 @@ server <- function(input, output) {
   # Module 2: plot 2 - equalizer plot
   output$mod2.equal <- renderPlotly({
     inputs <- mod2_input_object()
+    # get click info for bar plot
     d <- event_data("plotly_click", source = "sub_bar")
+    # get the threshold for significance
+    alpha <- get_threshold_for_p_adj(D, inputs[1])
     
     if (inputs[2] == "null") {
       # D:SE object, inputs: sidebar value, rd: pathway annotations
@@ -1776,10 +1782,13 @@ server <- function(input, output) {
     data <- D %>%
       maplet:::mti_format_se_samplewise() %>%
       tidyr::gather(var, value, dplyr::one_of(rownames(D)))
-    
+    # get the click info for bar/equalizer/volcano if available
     d.bar <- event_data("plotly_click", source = "sub_bar")
     d.eq <- event_data("plotly_click", source = "sub_eq")
     d.vol <- event_data("plotly_click", source = "sub_vol")
+    
+    # get the threshold for significance
+    alpha <- get_threshold_for_p_adj(D, inputs[1])
     
     plot <- mod2_plot_box_scatter(D, # SE object
                                   inputs, # sidebar inputs

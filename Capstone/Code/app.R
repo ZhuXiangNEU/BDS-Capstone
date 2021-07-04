@@ -89,7 +89,7 @@ ui <- fluidPage(
                      id = "mod6_panel1",
                      style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; width: 80%; ",
                      tags$p(
-                       HTML("<b>Module 6</b> starts with original data, creates a pipeline and download it to local."
+                       HTML("<b>Real-Time Pipeline</b> starts with original data, creates a pipeline and download it to local."
                        )),
                      tags$p(
                        HTML("Pipeline is constrained to run in order of <b>Data Loading->Preprocessing->Differential Analysis</b> and no section should be skipped."
@@ -232,7 +232,7 @@ ui <- fluidPage(
                             # sidebar autoscroll with main panel
                             style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
                             tags$p(
-                              HTML("<b>Module 5</b> creates tables, distribution plots, or other graphics to explore the SE object."
+                              HTML("<b>Annotations Explorer</b> creates tables, distribution plots, or other graphics to explore the SE object."
                               )),
                             radioButtons("mod5_dimension", "Select one dimension:", 
                                          choices = list("Column Data" = "col", 
@@ -266,7 +266,7 @@ ui <- fluidPage(
                             # sidebar autoscroll with main panel
                             style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
                             tags$p(
-                              HTML("<b>Module 3</b> generates an interactive 2D projection of PCA/UMAP."
+                              HTML("<b>2D Projection</b> generates an interactive 2D projection of PCA/UMAP."
                               )),
                             tags$p(
                               HTML("It displays a drop-down menu of all colData columns for coloring."
@@ -308,7 +308,7 @@ ui <- fluidPage(
                             # sidebar auto-scrolling with main panel
                             style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
                             tags$p(
-                              HTML("<b>Module 1</b> extracts all the result objects one at a time."
+                              HTML("<b>All Results Explorer</b> extracts all the result objects one at a time."
                               )),
                             tags$p(
                               HTML("Users can assess results in a drop-down menu that offers a list of a stat_name and a plot type (e.g. missingness, pval)."
@@ -355,7 +355,7 @@ ui <- fluidPage(
                  style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
                  tags$p(
                    HTML(
-                     "<b>Module 4</b> requires collection on all statistical results in a table given one metabolite name."
+                     "<b>Feature Results Explorer</b> requires collection on all statistical results in a table given one metabolite name."
                    )
                  ),
                  tags$p(
@@ -414,7 +414,7 @@ ui <- fluidPage(
                  style = "margin-left: -25px; margin-top: 45px; margin-bottom: 5px; position:fixed; width: 20%; height: 100%;",
                  tags$p(
                    HTML(
-                     "<b>Module 2:</b> Displays a series of interactive plots at different granularities given a SE and a statname."
+                     "<b>Pathway Results Explorer:</b> Displays a series of interactive plots at different granularities given a SE and a statname."
                    )
                  ),
                  tags$p(
@@ -435,7 +435,7 @@ ui <- fluidPage(
                    "mod2.plot1",
                    "Select plot1 type:",
                    choices = list("Bar" = "bar",
-                                  "Not Bar" = "null"),
+                                  "Not Bar plot" = "null"),
                    selected  = "bar"
                  ),
                  br(),

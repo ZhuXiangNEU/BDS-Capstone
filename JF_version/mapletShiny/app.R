@@ -328,7 +328,7 @@ ui <- fluidPage(
                             uiOutput("mod1_select_object_ui"),
                             br(),   
                             tags$p(
-                              HTML("<b>Hint:<br></b>Outputs are delayed untill you click 'UPDATE' button after selection. Some plots such as box plot or multiple plots may cost dozens of seconds to show up."
+                              HTML("<b>Hint:<br></b>Outputs are delayed untill you click 'UPDATE' button after selection. Some plots such as box plot or multiple plots may take dozens of seconds to show up."
                               )),
                             # delay the output
                             actionButton("mod1_go", "Update")
@@ -1068,7 +1068,7 @@ server <- function(input, output) {
     }
   )
   
-  # Define rendering logic of control widgets in Module-Annotations Explorer(coded as mod3) ------------------------
+  # Define rendering logic of control widgets in Module-2D projection(coded as mod3) ------------------------
   output$mod3_pca_data <- renderUI({
     if(input$mod3_select_plot=="pca"){
       selectInput("mod3_pca_data_type", "Select data type for PCA:",
@@ -1183,7 +1183,7 @@ server <- function(input, output) {
                                         input$mod3_umap_n_neighbors)}
   )
   
-  # Define rendering logic of outputs in Module-Annotations Explorer(coded as mod3) --------------------------------
+  # Define rendering logic of outputs in Module-2D projection(coded as mod3) --------------------------------
   
   # render pca/umap of mod3
   output$mod3_plot <- renderPlotly({
@@ -1309,7 +1309,7 @@ server <- function(input, output) {
   
   # Call renderPlot for each one. Plots are only actually generated when they
   # are visible on the web page.
-    # get the max number of objects
+  # get the max number of objects
   num_df <- subset(obj_name, V1=="plots")
   num_df <- num_df %>%
     dplyr::group_by(V2, stat_name) %>%
